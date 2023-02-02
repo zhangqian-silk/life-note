@@ -865,8 +865,6 @@ NSValue主要用来封装结构体（对象），传递的参数是所要封装�
 + (instancetype)dataWithContentsOfURL:(NSURL *)url;
 ```
 
-
-
 # Copy
 
 浅拷贝：对于非容器类，拷贝对象的地址，对于容器类，重新分配一块内存给容器，即容器地址不一样，但是容器装的内容的地址一样
