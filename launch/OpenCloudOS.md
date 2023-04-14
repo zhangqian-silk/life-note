@@ -94,6 +94,7 @@ sudo systemctl daemon-reload
     ```
 
 - 重新启动终端，按照 powerlevel10k 提示进行配置，最终会生成配置文件（`/root/.p10k.zsh`）
+- 配置颜色时，可通过 `for code ({000..255}) print -P -- "$code: %F{$code}text color%f"` 获取所有颜色代码
 
 ### 插件设置
 
