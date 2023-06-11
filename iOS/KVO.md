@@ -143,7 +143,7 @@
     func setValue(_ value: Any?, forKeyPath keyPath: String)
     ```
 
-- 第二点，被观察的类必须可以发出 `KVO` 通知，如果是继承的 `NSObject`，一般情况下这一点默认是支持的；
+- 第二点，被观察的类必须可以发出 `KVO` 通知，如果是继承的 `NSObject`，一般情况下这一点默认是支持的。
 - 第三点，对于存在依赖关系的属性，例如计算属性，通常情况下都是其他存储属性通过一些运算得到的，此时如果按照以往的方法，只观察计算属性就会存在问题，因为实际被修改的是相关联的存储属性，计算属性本身不会被显示的修改，这种场景下必须恰当地注册依赖关系。
 
 ### 触发方式
@@ -163,7 +163,7 @@ person.account[keyPath: \Account.balance] = 100.0
 
 同时，我们也可以通过一些配置，来完全自定义 `KVO` 的通知逻辑：
 
-1. 通过 `willChangeValue(forKey:)` 与 `didChangeValue(forKey:)` 可以实现手动通知，例如我们需要对 `setter` 方法做一些处理，减少通知频率：
+- 通过 `willChangeValue(forKey:)` 与 `didChangeValue(forKey:)` 可以实现手动通知，例如我们需要对 `setter` 方法做一些处理，减少通知频率：
 
     ```Swift
     func setBalance(_ theBalance: Double) -> Bool {
@@ -178,7 +178,7 @@ person.account[keyPath: \Account.balance] = 100.0
     }
     ```
 
-2. 自动触发与手动触发，并非是完全冲突的，不过我们也可以通过重写 `automaticallyNotifiesObservers(forKey:)` 来手动禁止通知：
+- 自动触发与手动触发，并非是完全冲突的，不过我们也可以通过重写 `automaticallyNotifiesObservers(forKey:)` 来手动禁止通知：
 
     ```Swift
     override class func automaticallyNotifiesObservers(forKey key: String) -> Bool {
@@ -189,7 +189,7 @@ person.account[keyPath: \Account.balance] = 100.0
     }
     ```
 
-3. 针对于相关联的属性，可以通过手动触发多次 `KVO` 来一起进行通知：
+- 针对于相关联的属性，可以通过手动触发多次 `KVO` 来一起进行通知：
 
     ```Swift
     func setBalance(_ theBalance: Double) -> Bool {
@@ -235,10 +235,10 @@ obs = account.observe(\.balance, options: .new, changeHandler: { account, change
 ```
 
 在 Swift 中，添加 `KVO` 前两个属性的 `isa` 指针均正常指向 `Account` 类，地址均为`0x0100000104bea531`：
-    ![Swift 添加 KVO 前](images/2023-05-29-14-56-45.png)
+    <div align=center><img src="images/2023-05-29-14-56-45.png" width="70%"></div>
 
 在添加了 `KVO` 之后，两个属性的 `isa` 指针均指向`Account`，但是添加了 `KVO` 的 `account` 属性，指针已经被修改为 `0x0100000104bea537`，而没有添加 `KVO` 的 `account_original` 属性，指针保持不变。
-    ![Swift 添加 KVO 后](images/2023-05-29-15-15-08.png)
+    <div align=center><img src="images/2023-05-29-15-15-08.png" width="70%"></div>
 
 在 OC 中，我们同样按照上面的方案来测试：
 
@@ -376,7 +376,8 @@ childPerson.account.balance = 222
 - Swift:
 
     ```Swift
-    static let accountContext = UnsafeMutableRawPointer(mutating: ("PersonAccountBalanceContext" as NSString).utf8String);
+    static let accountContext = UnsafeMutableRawPointer(mutating:
+                                ("PersonAccountBalanceContext" as NSString).utf8String);
     ```
 
 - OC:
@@ -508,7 +509,7 @@ class Person: NSObject {
     ```
 
   - 最终执行结果如下：
-    <div align=center><img src="images/2023-06-04-00-33-01.png" width="100%"></div>
+    <div align=center><img src="images/2023-06-04-00-33-01.png" width="90%"></div>
 
 - 容器操作：
   - 用于容器对象（`Array`、`Set`、`OrderedSet`）的增、删、改操作，对应的操作类型分别为：

@@ -1,9 +1,3 @@
-[[iOS] Crash来集合啦](https://www.jianshu.com/p/5b2bd04e4414)
-
-[iOS 如何快速有效的定位App carsh以及防护](https://www.jianshu.com/p/71a1a3ae74af)
-
-
-
 # 异常
 
 ## 什么是异常
@@ -16,10 +10,6 @@
 - **Unix信号**：又称BSD 信号，如果开发者没有捕获Mach异常，则会被host层的方法ux_exception()将异常转换为对应的UNIX信号，并通过方法threadsignal()将信号投递到出错线程。可以通过方法signal(x, SignalHandler)来捕获signal。
 - **NSException**：应用级异常，它是未被捕获的Objective-C异常，导致程序向自身发送了SIGABRT信号而崩溃，是app自己可控的，对于未捕获的Objective-C异常，是可以通过try catch来捕获的，或者通过NSSetUncaughtExceptionHandler()机制来捕获。
 - **C++Exception**：C++ 语言层面的异常，与 NSException 类似。
-
-
-
-
 
 异常信息包括异常类型(`exception type`)、异常子类型(`exception subtype`)、异常编码(`exception code`)、 异常描述(`exception note`)异常线程号(`Triggered by Thread`)和其它异常信息，`crashlog` 文件会给出以上几种或者全部异常字段。
 
@@ -63,11 +53,7 @@ Unix 信号还有很多，此处仅列举 Crashlog 文件中常见的信号类�
 - ⑤ `0xc00010ff`：程序执行大量耗费 CPU 和 GPU 运算，导致设备过热，被系统中止。
 - ⑥ `0xdead10cc`：程序退至后台，仍然占用着系统资源。
 
-
-
 # [异常对应表格](https://juejin.cn/post/6860022809646039053)
-
-
 
 | Exception Type      | Signal  | 描述                                                         |
 | ------------------- | ------- | ------------------------------------------------------------ |
@@ -82,7 +68,6 @@ Unix 信号还有很多，此处仅列举 Crashlog 文件中常见的信号类�
 |                     | SIGKILL | 在系统的请求下，进程被终止。查看终止原因字段以更好地理解终止的原因。 终止原因字段将包含后跟代码的名称空间。以下代码是针对watchOS的: 终止码0xc51bad01表示一个监视应用程序被终止了，因为它在执行后台任务时占用了太多的CPU时间。要解决这个问题，可以优化执行后台任务的代码以提高CPU效率，或者减少在后台运行应用程序时执行的工作量。 终止代码0xc51bad02表示一个监视应用程序被终止，因为它未能在分配的时间内完成一个后台任务。要解决这个问题，减少应用程序在后台运行时执行的工作量。 终止码0xc51bad03表示一个监视应用程序未能在分配的时间内完成一个后台任务，并且系统总体上非常繁忙，应用程序可能没有收到足够多的CPU时间来执行后台任务。虽然一个应用程序可以通过减少它在后台任务中执行的工作量来避免这个问题，但是0xc51bad03并不表示这个应用程序做错了什么。更有可能的是，由于整个系统的负载，该应用程序无法完成其工作。 |
 | EXC_BREAKPOINT      | SIGTRAP | 跟踪陷阱，由断点指令或其它trap指令产生，由debugger使用。与异常退出类似，此异常旨在使附加的调试器有机会在进程执行的特定位置中断进程。您可以使用_builtin_trap()函数从您自己的代码中触发此异常。如果没有附加调试器，则终止进程并生成崩溃报告。swift的空指针或类型转换失败也会导致此信号 |
 
-​                                                                                                                      
+[[iOS] Crash来集合啦](https://www.jianshu.com/p/5b2bd04e4414)
 
-# ARM64
-
+[iOS 如何快速有效的定位App carsh以及防护](https://www.jianshu.com/p/71a1a3ae74af)
