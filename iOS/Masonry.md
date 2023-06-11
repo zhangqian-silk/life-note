@@ -1,9 +1,3 @@
-[源码解读——Masonry](http://chuquan.me/2019/10/02/understand-masonry/)
-
-[iOS开发之Masonry框架源码解析](https://www.cnblogs.com/ludashi/p/5591572.html)
-
-[Masonry源码解读](https://www.jianshu.com/p/8990c5a98d29)
-
 # Masonry
 
 对系统api进行封装后的第三方自动布局框架，需要引入头文件“Masonry.h”
@@ -624,3 +618,8 @@ mas_width()     用来获取宽度的值。和上面的区别在于，一个代�
 }
 ```
 
+[源码解读——Masonry](http://chuquan.me/2019/10/02/understand-masonry/)
+
+[iOS开发之Masonry框架源码解析](https://www.cnblogs.com/ludashi/p/5591572.html)
+
+[Masonry源码解读](https://www.jianshu.com/p/8990c5a98d29)
