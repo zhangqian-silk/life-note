@@ -2,6 +2,10 @@
 
 > Git 链接：<https://github.com/Chen-23333/Markdown/blob/master/Travel/QingDao.md>
 
+<br>
+<br>
+<br>
+
 ![](images/2023-07-20-22-24-31.png)
 
 <div STYLE="page-break-after: always;"></div>
@@ -83,8 +87,7 @@
   <div align=center><img src="images/2023-06-06-22-59-23.png" width="80%"></div>
 
 - 五四广场：
-  - 市南区东部。
-  - 因纪念五四运动学生捍卫青岛主权的爱国行为而得名。
+  - 市南区东部，因纪念五四运动学生捍卫青岛主权的爱国行为而得名。
   <div align=center><img src="images/2023-06-06-23-16-36.png" width="80%"></div>
   <div align=center><img src="images/2023-06-06-23-38-37.png" width="80%"></div>
 
@@ -139,13 +142,16 @@
   - 锅贴
   - 火烧
 
-- 熔意提花火锅
+- 熔意蹄花火锅
   - 市北区清江路
   - 猪蹄特别好吃，必去
 
+- 台东夜市
+  - 老北京爆肚
+
 - 九龙餐厅
   - 市南区大沽路6号，网红餐厅（天主教堂附近）
-  - 招牌菜：辣蛤蜊、香辣鱿鱼条、五花肉炒比管
+  - 招牌菜：辣蛤蜊、香辣鱿鱼条
 
 - 王姐烧烤总店
   - 中山路和德县路路口
@@ -168,13 +174,13 @@
 
 <div STYLE="page-break-after: always;"></div>
 
-## 路线
+## 路线参考
 
 > （）内的地点，可去可不去
 
 ### Day0
 
-- 到达青岛站后，坐地铁去往酒店，中途或者到达后可以去台东步行街
+- 晚上到达青岛站后，坐地铁去往酒店，中途或者到达后可以去台东步行街
 
 <div align=center><img src="images/2023-06-09-20-43-19.png" width="80%"></div>
 
