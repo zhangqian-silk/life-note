@@ -8,7 +8,7 @@ Thrift 是由 Fackbook 团队开发的跨语言的 RPC 框架，于 2007 年开�
 
 Thrift 采用了 C/S 架构，并通过 IDL(Interface Description Language) 定义接口，之后会协助生成目标语言的代码。生成的代码包括将数据结构和服务接口转换为目标语言的类和接口。
 
-## IDL 文件构成
+## IDL 文件
 
 > [Thrift Types](https://thrift.apache.org/docs/types)
 > [Thrift interface description languagel](https://thrift.apache.org/docs/idl)
@@ -38,6 +38,12 @@ IDL 文件使用了 Thrift 定义的一些基础类型，使用者无需再考�
 
     ```text
     Identifier      ::=  ( Letter | '_' ) ( Letter | Digit | '.' | '_' )*
+    ```
+
+- `ListSeparator`：分隔符，用来标识语句的结束，通常是可选项。
+
+    ```text
+    ListSeparator   ::=  ',' | ';'
     ```
 
 ### Document
@@ -98,7 +104,7 @@ Namespace       ::=  ( 'namespace' ( NamespaceScope Identifier ) )
 NamespaceScope  ::=  '*' | 'c_glib' | 'cpp' | 'delphi' | 'haxe' | 'go' | 'java' | 'js' | 'lua' | 'netstd' | 'perl' | 'php' | 'py' | 'py.twisted' | 'rb' | 'st' | 'xsd'
 ```
 
-`namespace` 可以声明该 thrift 最终生成代码时，其内部定义的变量、结构、服务等将针对这些语言生成对应的代码。
+`Namespace` 可以声明该 thrift 最终生成代码时，其内部定义的变量、结构、服务等将针对这些语言生成对应的代码。
 
 例如在文件中包含了如下定义，则最终生成代码时，会在 `silk/example/go` 的路径下，生成对应的 go 文件，在 `silk/example/java` 的路径下，生成对应的 java 文件。
 
@@ -106,3 +112,97 @@ NamespaceScope  ::=  '*' | 'c_glib' | 'cpp' | 'delphi' | 'haxe' | 'go' | 'java' 
 namespace go silk.example.go
 namespace python silk.example.python
 ```
+
+### Definition
+
+```text
+Definition      ::=  Const | Typedef | Enum | Struct | Union | Exception | Service
+```
+
+`Definition` 可以包含常量(`Const`)、类型声明(`Typedef`)、枚举(`Enum`)、结构体(`Struct`)、联合体(`Union`)、异常(`Exception`)、服务(`Service`)。这部分是 IDL 的核心内容。
+
+#### Const
+
+```text
+Const           ::=  'const' FieldType Identifier '=' ConstValue ListSeparator?
+```
+
+常量(`Const`)声明的构成包括 `const` 关键字，常量的类型(`FieldType`)，常量的标识符(`Identifier`)，赋值符号(`=`)，常量值(`ConstValue`)以及可选的分隔符(`ListSeparator`)。
+
+例如:
+
+```thrift
+const i8 constInt = 100
+const string constString = 'hello, world';
+```
+
+#### Typedef
+
+```text
+Typedef         ::=  'typedef' DefinitionType Identifier
+```
+
+类型定义(`Typedef`)以 `typedef` 开头，用于为类型(`DefinitionType`)创建别名(`Identifier`)。
+
+例如：
+
+```thrift
+typedef i8 int8
+const int8 constInt = 100
+```
+
+#### Enum
+
+```text
+Enum            ::=  'enum' Identifier '{' (Identifier ('=' IntConstant)? ListSeparator?)* '}'
+```
+
+枚举(`Enum`)用来创建一种可以被枚举的类型，并对每一种值给定特定的命名。
+
+以关键字 `enum` 开头，紧跟着类型标识符(`Identifier`)，用花括号(`{}`)包裹起来该枚举对应的所有的值，每个枚举值都有特定的标识符(`Identifier`)，并且可以为其赋值一个非负的整形(`IntConstant`)，最后可以以分隔符结尾(`ListSeparator`)。
+
+若没有显示的给枚举值赋值，则首位枚举值默认为 0，其他枚举值默认是前一个枚举值的结果加 1。例如：
+
+```thrift
+enum silk {
+    began   // 默认为 0
+    pause   // 默认为 began + 1 = 1
+    ended   // 默认为 pause + 1 = 2
+}
+```
+
+我们也可以通过手动赋值，来实现位图的效果，例如：
+
+```thrift
+enum silk {
+    status_0 = 1>>0
+    status_1 = 1>>1
+    status_2 = 1>>2
+    status_3 = 1>>3
+}
+```
+
+#### Struct
+
+```text
+Struct          ::=  'struct' Identifier '{' Field* '}'
+```
+
+结构体(`Struct`)是 Thrift 中的基本组合类型，其中每个字段(`Field`)的名称在结构体内部都要求是唯一的。
+
+以关键字 `struct` 开头，紧跟着类型标识符(`Identifier`)，用花括号(`{}`)包裹起来该结构体所包含的所有字段(`Field`)。例如：
+
+```thrift
+enum silk {
+    status_0 = 1>>0
+    status_1 = 1>>1
+    status_2 = 1>>2
+    status_3 = 1>>3
+}
+```
+
+#### Union
+
+#### Exception
+
+#### Service
