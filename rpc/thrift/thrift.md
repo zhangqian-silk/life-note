@@ -8,43 +8,75 @@ Thrift 是由 Fackbook 团队开发的跨语言的 RPC 框架，于 2007 年开�
 
 Thrift 采用了 C/S 架构，并通过 IDL(Interface Description Language) 定义接口，之后会协助生成目标语言的代码。生成的代码包括将数据结构和服务接口转换为目标语言的类和接口。
 
-## IDL 文件
+## IDL
 
 > [Thrift Types](https://thrift.apache.org/docs/types)
 > [Thrift interface description languagel](https://thrift.apache.org/docs/idl)
 
 For Thrift version 0.20.0.
 
-Thrift 可以按照 IDL 文件中定义的数据结构与服务，生成特定语言的代码，以达到跨语言通信的功能。
-
-IDL 文件使用了 Thrift 定义的一些基础类型，使用者无需再考虑其他语言。
+Thrift 可以按照 IDL 中定义的数据类型与服务，生成特定语言的代码，以达到跨语言通信的功能。使用者无需再考虑其他语言。
 
 ### Basic Definitions
 
+```text
+Literal         ::=  ('"' [^"]* '"') | ("'" [^']* "'")
+
+Letter          ::=  ['A'-'Z'] | ['a'-'z']
+
+Digit           ::=  ['0'-'9']
+
+Identifier      ::=  ( Letter | '_' ) ( Letter | Digit | '.' | '_' )*
+
+ListSeparator   ::=  ',' | ';'
+```
+
 - `Literal`：字面量，匹配所有单引号或双引号包裹起来的内容。
-
-    ```text
-    Literal         ::=  ('"' [^"]* '"') | ("'" [^']* "'")
-    ```
-
 - `Letter` & `Digit`：字母和数字的集合。
-
-    ```text
-    Letter          ::=  ['A'-'Z'] | ['a'-'z']
-    Digit           ::=  ['0'-'9']
-    ```
-
 - `Identifier`：标识符，用来定义变量名，结构名，服务名，等等。只能以字母或 '\_' 开头，只能包含字母、数字、'\.' 和 '\_'。
-
-    ```text
-    Identifier      ::=  ( Letter | '_' ) ( Letter | Digit | '.' | '_' )*
-    ```
-
 - `ListSeparator`：分隔符，用来标识语句的结束，通常是可选项。
 
-    ```text
-    ListSeparator   ::=  ',' | ';'
-    ```
+### Types
+
+```text
+FieldType       ::=  Identifier | BaseType | ContainerType
+
+BaseType        ::=  'bool' | 'byte' | 'i8' | 'i16' | 'i32' | 'i64' | 'double' | 'string' | 'binary' | 'uuid'
+
+ContainerType   ::=  MapType | SetType | ListType
+
+MapType         ::=  'map' CppType? '<' FieldType ',' FieldType '>'
+
+SetType         ::=  'set' CppType? '<' FieldType '>'
+
+ListType        ::=  'list' CppType? '<' FieldType '>' 
+
+CppType         ::=  'cpp_type' Literal
+```
+
+Thrift 中的字段类型(`FieldType`)支持自定义类型(`Identifier`)、基础类型(`BaseType`)以及容器类型(`ContainerType`)。
+
+### Constant Values
+
+```text
+ConstValue      ::=  IntConstant | DoubleConstant | Literal | Identifier | ConstList | ConstMap
+
+IntConstant     ::=  ('+' | '-')? Digit+
+
+DoubleConstant  ::=  ('+' | '-')? Digit* ('.' Digit+)? ( ('E' | 'e') IntConstant )?
+
+ConstList       ::=  '[' (ConstValue ListSeparator?)* ']'
+
+ConstMap        ::=  '{' (ConstValue ':' ConstValue ListSeparator?)* '}'
+```
+
+### Field
+
+```text
+Field           ::=  FieldID? FieldReq? FieldType Identifier ('=' ConstValue)? XsdFieldOptions ListSeparator?
+FieldID         ::=  IntConstant ':'
+FieldReq        ::=  'required' | 'optional' 
+```
 
 ### Document
 
@@ -74,7 +106,7 @@ Include         ::=  'include' Literal
 
 ```thrift
 struct Base {
-...
+    ...
 }
 ```
 
@@ -140,9 +172,12 @@ const string constString = 'hello, world';
 
 ```text
 Typedef         ::=  'typedef' DefinitionType Identifier
+DefinitionType  ::=  BaseType | ContainerType
 ```
 
-类型定义(`Typedef`)以 `typedef` 开头，用于为类型(`DefinitionType`)创建别名(`Identifier`)。
+类型定义(`Typedef`)以 `typedef` 开头，用于为 Thrift 中声明的类型(`DefinitionType`)创建别名(`Identifier`)。
+
+要注意，目前 `Typedef` 还不支持为自定义类型创建别名。
 
 例如：
 
