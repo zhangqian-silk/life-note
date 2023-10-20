@@ -56,6 +56,9 @@ CppType         ::=  'cpp_type' Literal
 
 Thrift 中的字段类型(`FieldType`)支持自定义类型(`Identifier`)、基础类型(`BaseType`)以及容器类型(`ContainerType`)。
 
+基础类型如下所示：
+
+
 ### Constant Values
 
 ```text
