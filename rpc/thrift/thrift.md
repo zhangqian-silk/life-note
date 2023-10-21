@@ -116,7 +116,9 @@ const map<string, string> silk7 = {'key1': 'value1', 'key2': 'value2'}
 
 ```text
 Field           ::=  FieldID? FieldReq? FieldType Identifier ('=' ConstValue)? ListSeparator?
+
 FieldID         ::=  IntConstant ':'
+
 FieldReq        ::=  'required' | 'optional' 
 ```
 
@@ -246,20 +248,22 @@ Enum            ::=  'enum' Identifier '{' (Identifier ('=' IntConstant)? ListSe
 
 以关键字 `enum` 开头，紧跟着类型标识符(`Identifier`)，用花括号(`{}`)包裹起来该枚举对应的所有的值，每个枚举值都有特定的标识符(`Identifier`)，并且可以为其赋值一个非负的整形(`IntConstant`)，最后可以以分隔符结尾(`ListSeparator`)。
 
-若没有显示的给枚举值赋值，则首位枚举值默认为 0，其他枚举值默认是前一个枚举值的结果加 1。例如：
+若没有显示的给枚举值赋值，则首位枚举值默认为 0，其他枚举值默认是前一个枚举值的结果加 1。同时需要注意枚举名称本身即代表了命名空间，在使用时需要拼写全部的名称。例如：
 
 ```thrift
-enum silk {
+enum Silk {
     began   // 默认为 0
     pause   // 默认为 began + 1 = 1
     ended   // 默认为 pause + 1 = 2
 }
+
+Silk silkStatus = Silk.began
 ```
 
 我们也可以通过手动赋值，来实现位图的效果，例如：
 
 ```thrift
-enum silk {
+enum Silk {
     status_0 = 1>>0
     status_1 = 1>>1
     status_2 = 1>>2
@@ -278,7 +282,7 @@ Struct          ::=  'struct' Identifier '{' Field* '}'
 以关键字 `struct` 开头，紧跟着类型标识符(`Identifier`)，用花括号(`{}`)包裹起来该结构体所包含的所有字段(`Field`)。例如：
 
 ```thrift
-enum silk {
+enum Silk {
     status_0 = 1>>0
     status_1 = 1>>1
     status_2 = 1>>2
@@ -288,6 +292,54 @@ enum silk {
 
 #### Union
 
+```text
+Union          ::=  'union' Identifier '{' Field* '}'
+```
+
+联合(`Union`)和结构体(`Struct`)较为类似，但是其内部的字段都默认会共用一段内存空间，有且仅有一个字段会被赋值。例如在统计信息时，用户可以使用电话号码或者邮箱：
+
+```thrift
+union SilkInfo {
+    1: string phone,
+    2: string email
+}
+
+// 只能有一个字段被设置
+SilkInfo info_0.phone = "12312341234"
+// SilkInfo info_0.email = "123@qq.com"
+```
+
 #### Exception
 
+```text
+Exception       ::=  'exception' Identifier '{' Field* '}'
+```
+
+异常(`Exception`)同样与结构体(`Struct`)类似，只不过在生成具体编程语言的代码时，会适当地继承对应的基类。
+
 #### Service
+
+```text
+Service         ::=  'service' Identifier ( 'extends' Identifier )? '{' Function* '}'
+
+Function        ::=  'oneway'? FunctionType Identifier '(' Field* ')' Throws? ListSeparator?
+
+FunctionType    ::=  FieldType | 'void'
+
+Throws          ::=  'throws' '(' Field* ')'
+```
+
+服务(`Service`)类似于接口，其内部包含了为某个特定服务提供能力支持的，一组任意数量的函数(`Function`)，同时服务也可以拓展其他已定义的服务(`'extends' Identifier`)。
+
+函数(`Function`)一般由函数类型(`FunctionType`)、函数标识符(`Identifier`)以及任意数量的入参(`' Field* '`)构成。以外还包括可选关键字 `oneway`、异常抛出(`Throws`)以及分隔符(`ListSeparator`)。
+
+`oneway` 表示这个函数是单向的，客户端只需要发起对应请求即可，服务端不会返回任何响应。与返回类型 `void` 的区别在于，`void` 类型的函数仍然可以抛出异常。
+
+例如：
+
+```thrift
+service SilkService {
+    oneway void SetUser(1: string UserId),
+    i16 GetAge(1: string UserId) throws (1: Error err),
+}
+```
