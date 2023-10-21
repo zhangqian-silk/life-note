@@ -1,6 +1,8 @@
 # Thrift
 
 > [Thrift: Scalable Cross-Language Services Implementation](https://thrift.apache.org/static/files/thrift-20070401.pdf)
+> [Github Apache Thrift](https://github.com/apache/thrift/tree/master)
+> [Thrift: The Missing Guide](https://diwakergupta.github.io/thrift-missing-guide/#_language_reference)
 
 ## 简介
 
@@ -56,8 +58,28 @@ CppType         ::=  'cpp_type' Literal
 
 Thrift 中的字段类型(`FieldType`)支持自定义类型(`Identifier`)、基础类型(`BaseType`)以及容器类型(`ContainerType`)。
 
-基础类型如下所示：
+基础类型(`BaseType`)的定义如下所示：
 
+- bool: A boolean value (true or false)
+- byte: An 8-bit signed integer
+- i8: An 8-bit signed integer
+- i16: A 16-bit signed integer
+- i32: A 32-bit signed integer
+- i64: A 64-bit signed integer
+- double: A 64-bit floating point number
+- string: A text string encoded using UTF-8 encoding
+- binary: a sequence of unencoded bytes
+- uuid(Universal unique identifier encoding): A 16-byte binary in big endian (or "network") order
+
+可以看到，出于通用性考虑，基础类型并没有包括无符号整型（部分编程语言并不支持）。同时，也并非会一味兼容，例如在最近引入的 `uuid`，出于必要性考虑，会去推动其他语言引入相关类型的定义，如 [Introduce uuid as additional builtin type](https://issues.apache.org/jira/browse/THRIFT-5587)。
+
+容器类型(`ContainerType`)的定义如下所示：
+
+- list: An ordered list of elements. Translates to an STL vector, Java ArrayList, native arrays in scripting languages, etc.
+- set: An unordered set of unique elements. Translates to an STL set, Java HashSet, set in Python, etc. Note: PHP does not support sets, so it is treated similar to a List
+- map<type1,type2>: A map of strictly unique keys to values. Translates to an STL map, Java HashMap, PHP associative array, Python/Ruby dictionary, etc. While defaults are provided, the type mappings are not explicitly fixed. Custom code generator directives have been added to allow substitution of custom types in various destination languages.
+
+Thrift 中的容器类型也是非常通用的，可以映射到大部分常用编程语言中，容器内部的元素，也可以是任何 Thrift 中的合法类型，但是容器中元素类型必须一致。此外，针对于 `map` 类型，为了最大的兼容性，我们在使用的时候最好是使用基础类型，而不是结构体或是容器类型，比如在 JSON 协议中，key 值就只能是基本类型。
 
 ### Constant Values
 
@@ -73,13 +95,40 @@ ConstList       ::=  '[' (ConstValue ListSeparator?)* ']'
 ConstMap        ::=  '{' (ConstValue ':' ConstValue ListSeparator?)* '}'
 ```
 
+常量值(`ConstValue`)举例如下：
+
+```thrift
+// 数字均可支持正数或是复数
+const i8 silk0 = 2000
+const double silk1 = 3.26
+const double silk2 = 3.26e3     // 科学计数法，即 3260
+const double silk3 = 3.26e-3    // 科学计数法，即 0.00326
+
+const string silk4 = "silk"
+const string silk5 = silk4
+
+// 此处 ',' 可替换为 ';'，或是直接省略
+const list<string> silk6 = ['a', 'b', 'c']
+const map<string, string> silk7 = {'key1': 'value1', 'key2': 'value2'}  
+```
+
 ### Field
 
 ```text
-Field           ::=  FieldID? FieldReq? FieldType Identifier ('=' ConstValue)? XsdFieldOptions ListSeparator?
+Field           ::=  FieldID? FieldReq? FieldType Identifier ('=' ConstValue)? ListSeparator?
 FieldID         ::=  IntConstant ':'
 FieldReq        ::=  'required' | 'optional' 
 ```
+
+字段(`Field`)主要包括字段类型(`FieldType`)与字段标识符(`Identifier`)，此外字段 ID(`FieldID`)、字段必要性(`FieldReq`)、字段默认值(`'=' ConstValue`)以及分隔符(`ListSeparator`)均是可选项。
+
+字段 ID (`FieldID`)由整型常量(`IntConstant`)加上冒号分隔符(`':'`)构成，在序列化时，是字段的唯一标识，如果不填写的话，会有默认填充。但是同时也因为是唯一标识，随意删改会有较大影响，倾向于手动为字段赋值，且新的改动在原有基础上进行拓展，而非修改。
+
+字段必要性(`FieldReq`)有两种显式声明 `required` 和 `optional`，也有一种默认取值 `default`。区别简介如下：
+
+- `required`：一定会被序列化，如果未赋值，则会抛出异常。同时，就像是流传比较广的一句话，“Required Is Forever”，如果修改 `required` 的声明，则类似于改动字段 ID(`FieldID`)，导致版本的不兼容。
+- `optional`：有赋值或有默认值时才会被序列化。
+- `default`：类似于 `required` 和 `optional` 的混合，也被称作 `opt-in, req-out`。但是在实际场景中，还是存在字段不会被写入的情况，特别是某些字段无法通过 thrift 进行传输。
 
 ### Document
 
@@ -140,8 +189,6 @@ NamespaceScope  ::=  '*' | 'c_glib' | 'cpp' | 'delphi' | 'haxe' | 'go' | 'java' 
 ```
 
 `Namespace` 可以声明该 thrift 最终生成代码时，其内部定义的变量、结构、服务等将针对这些语言生成对应的代码。
-
-例如在文件中包含了如下定义，则最终生成代码时，会在 `silk/example/go` 的路径下，生成对应的 go 文件，在 `silk/example/java` 的路径下，生成对应的 java 文件。
 
 ```thrift
 namespace go silk.example.go
