@@ -13,7 +13,7 @@ Thrift 采用了 C/S 架构，并通过 IDL(Interface Description Language) 定�
 ## IDL
 
 > [Thrift Types](https://thrift.apache.org/docs/types)
-> [Thrift interface description languagel](https://thrift.apache.org/docs/idl)
+> [Thrift interface description language](https://thrift.apache.org/docs/idl)
 
 For Thrift version 0.20.0.
 
