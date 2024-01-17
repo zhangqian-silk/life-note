@@ -49,4 +49,12 @@
 
 ## Go Pkg 推荐
 
+### Kitex
+
+> <https://www.cloudwego.io/zh/docs/kitex/getting-started/>
+
+### Sonic
+
+> <https://pkg.go.dev/github.com/bytedance/sonic@v1.10.2>
+
 ## Goland 插件配置
