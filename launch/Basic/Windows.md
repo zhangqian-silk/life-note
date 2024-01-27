@@ -12,9 +12,9 @@ Windows 中，部分基础软件安装方法，主要是环境变量的配置方
     3. JRE: JRE 是 Java Runtime Environment（Java运行环境）的缩写。它包括了JVM和Java类库，提供了Java程序运行所需要的环境。
 
 2. JavaSE是Java的标准版，用于开发一般的桌面和商务程序。JavaEE是Java的企业版，用于开发大型业务系统。JavaME是Java的微型版，主要用于移动设备和嵌入式设备:
-   1. JavaSE: JavaSE 是 Java Standard Edition（Java标准版）的缩写。它包括了核心API（比如基本数据类型、对象、异常处理）等，JavaSE 可以用来开发桌面应用。
-   2. JavaEE: JavaEE 是 Java Enterprise Edition（Java企业版）的缩写。基于JavaSE的基础上，JavaEE 还提供了创建企业级应用所需要的API，例如 Servlet，JSP，EJB，JMS，Web Services 等。
-   3. JavaME: JavaME 是 Java Micro Edition（Java微型版）的缩写。它是为了满足移动设备、嵌入式设备等小型设备的需求而产生的，JavaME提供了一套轻量级的API。
+    1. JavaSE: JavaSE 是 Java Standard Edition（Java标准版）的缩写。它包括了核心API（比如基本数据类型、对象、异常处理）等，JavaSE 可以用来开发桌面应用。
+    2. JavaEE: JavaEE 是 Java Enterprise Edition（Java企业版）的缩写。基于JavaSE的基础上，JavaEE 还提供了创建企业级应用所需要的API，例如 Servlet，JSP，EJB，JMS，Web Services 等。
+    3. JavaME: JavaME 是 Java Micro Edition（Java微型版）的缩写。它是为了满足移动设备、嵌入式设备等小型设备的需求而产生的，JavaME提供了一套轻量级的API。
 
 ### Download
 
@@ -22,16 +22,18 @@ Windows 中，部分基础软件安装方法，主要是环境变量的配置方
     ![](images/2024-01-27-20-02-31.png)
 
 2. 使用安装器安装：
-    ![](images/2024-01-27-20-10-57.png)
+    ![](images/2024-01-27-20-34-09.png)
 
 3. 配置环境变量：
-   1. 新增 JAVA_HOME 变量：
-    ![](images/2024-01-27-20-16-17.png)
-   2. 配置 Path：
-    ![](images/2024-01-27-20-18-43.png)
+    1. 新增 JAVA_HOME 变量：
+    ![](images/2024-01-27-20-36-17.png)
+    2. 配置 Path：
+       1. 需要注意此处配置路径时，高版本(如 jdk-17)，仅需配置 `%JAVA_HOME%\bin` 即可，低版本（如 jdk-8）可能还需要额外配置 `%JAVA_HOME%\jre\bin`，请以实际为准。
+       2. 系统有可能额外配置了其他 Java 环境路径，如 `C:\Program Files (x86)\Common Files\Oracle\Java\javapath`， 需要手动删除。
+    ![](images/2024-01-27-20-40-18.png)
 
 4. 验证：
-    ![](images/2024-01-27-20-11-32.png)
+    ![](images/2024-01-27-20-46-56.png)
 
 ## Make
 
@@ -46,3 +48,22 @@ Windows 中，部分基础软件安装方法，主要是环境变量的配置方
 
 4. 验证：
     ![](images/2024-01-21-22-46-52.png)
+
+## Neo4j
+
+1. 安装 JDK，按照上述步骤安装即可，需要注意版本匹配，参考[requirements-java](https://neo4j.com/docs/operations-manual/5/installation/requirements/#deployment-requirements-java)：
+    ![](images/2024-01-27-22-34-59.png)
+
+2. 前往[官网](https://neo4j.com/deployment-center/#gdb-tab)下载社区版：
+    ![](images/2024-01-27-21-15-16.png)
+
+3. 下载得到的 zip 文件，直接解压缩即可，因为涉及到文件写权限，推荐放在非系统盘。
+
+4. 配置环境变量：
+    1. 新增 NEO4J_HOME 变量（注意要是上述压缩文件解压后的地址）：
+    ![](images/2024-01-27-22-31-04.png)
+    2. 配置 Path：
+    ![](images/2024-01-27-22-21-39.png)
+
+5. 验证：
+    ![](images/2024-01-27-22-33-00.png)
