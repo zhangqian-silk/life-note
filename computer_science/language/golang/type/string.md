@@ -207,4 +207,105 @@ s += ", world!"
 fmt.Println(s) // Hello, world!
 ```
 
-## Byte 切片
+## Byte Slice
+
+字符串的不可变性，保障了安全和性能，但是当我们需要一些字符串的拼接等逻辑时，则会多次触发字符串的赋值，导致了没必要的内存开销。
+
+例如我们需要针对于一个整数字符串，每隔三个字符插入一个逗号分隔符，在仅使用 `string` 类时，每次循环都需要构建新的 `string` 结构体：
+
+```go
+func addComma(s string) string {
+    n := len(s)
+    if n <= 3 {
+        return s
+    }
+
+    commaIndex := n % 3
+    if commaIndex == 0 {
+        commaIndex = 3
+    }
+
+    result := s[:commaIndex]
+    for i := commaIndex; i < n; i += 3 {
+        result += "," + s[i:i+3]
+    }
+
+    return result
+}
+```
+
+相比之下，我们可以直接使用字节数组，即 `[]byte` 来满足我们修改字符串的需求，在 json 序列化等场景广泛使用。
+
+使用 `[]byte` 重写以上功能，在每次调用 `append()` 方法进行字符拼接操作时，如果切片本身的空间足够大，则不会触发任何额外的内存分配，且我们可以更前置的计算所需空间来初始化一个较为合理的切片大小：
+
+```go
+func addComma(s string) string {
+    n := len(s)
+    if n <= 3 {
+        return s
+    }
+
+    result := make([]byte, 0, n+n/3)
+
+    r := n % 3
+    if r == 0 {
+        r = 3
+    }
+
+    result = append(result, s[:r]...)
+    for i := r; i < n; i += 3 {
+        result = append(result, ',')
+        result = append(result, s[i:i+3]...)
+    }
+
+    return string(result)
+}
+```
+
+### 转换
+
+从底层数据结构上讲，字符串与字节切片底层都是字节数组，故而他们之间可以方便地相互转换。但是可变与不可变的限制，会导致产生了一些额外的内存消耗。
+
+```go
+s := "hello"
+b := []byte(s)
+t := string(b)
+```
+
+当从字节数组转化至字符串时，需要构造一个字节数组的拷贝，用来确认字符串是只读的。[slicebytetostring()](https://github.com/golang/go/blob/8960925ad8dd1ef234731d94ebbea263e35a3e42/src/runtime/string.go#L81) 方法如下所示：
+
+```go
+func slicebytetostring(buf *tmpBuf, ptr *byte, n int) string {
+    if n == 0 {
+        return ""
+    }
+    if raceenabled {
+        racereadrangepc(unsafe.Pointer(ptr),
+            uintptr(n),
+            getcallerpc(),
+            abi.FuncPCABIInternal(slicebytetostring))
+    }
+    if msanenabled {
+        msanread(unsafe.Pointer(ptr), uintptr(n))
+    }
+    if asanenabled {
+        asanread(unsafe.Pointer(ptr), uintptr(n))
+    }
+    if n == 1 {
+        p := unsafe.Pointer(&staticuint64s[*ptr])
+        if goarch.BigEndian {
+            p = add(p, 7)
+        }
+        return unsafe.String((*byte)(p), 1)
+    }
+
+    var p unsafe.Pointer
+    if buf != nil && n <= len(buf) {
+        p = unsafe.Pointer(buf)
+    } else {
+        p = mallocgc(uintptr(n), nil, false)
+    }
+    memmove(p, unsafe.Pointer(ptr), uintptr(n))
+    return unsafe.String((*byte)(p), n)
+}
+```
