@@ -262,7 +262,7 @@ func addComma(s string) string {
 }
 ```
 
-### 转换
+### 类型转换
 
 从底层数据结构上讲，字符串与字节切片底层都是字节数组，故而他们之间可以方便地相互转换。但是可变与不可变的限制，会导致产生了一些额外的内存消耗。
 
@@ -272,40 +272,144 @@ b := []byte(s)
 t := string(b)
 ```
 
-当从字节数组转化至字符串时，需要构造一个字节数组的拷贝，用来确认字符串是只读的。[slicebytetostring()](https://github.com/golang/go/blob/8960925ad8dd1ef234731d94ebbea263e35a3e42/src/runtime/string.go#L81) 方法如下所示：
+当字节切片和字符串之间进行转化时，在保障底层数据一致的同时，还需要保障字节切片的可变性与字符串的不变性，所以一般都会创建一个原有字节数组的副本。
+
+- [slicebytetostring()](https://github.com/golang/go/blob/8960925ad8dd1ef234731d94ebbea263e35a3e42/src/runtime/string.go#L81) 函数如下所示：
+
+    ```go
+    func slicebytetostring(buf *tmpBuf, ptr *byte, n int) string {
+        if n == 0 {
+            return ""
+        }
+        ...
+        if n == 1 {
+            p := unsafe.Pointer(&staticuint64s[*ptr])
+            if goarch.BigEndian {
+                p = add(p, 7)
+            }
+            return unsafe.String((*byte)(p), 1)
+        }
+
+        var p unsafe.Pointer
+        if buf != nil && n <= len(buf) {
+            p = unsafe.Pointer(buf)
+        } else {
+            p = mallocgc(uintptr(n), nil, false)
+        }
+        memmove(p, unsafe.Pointer(ptr), uintptr(n))
+        return unsafe.String((*byte)(p), n)
+    }
+    ```
+
+- [stringtoslicebyte()](https://github.com/golang/go/blob/8960925ad8dd1ef234731d94ebbea263e35a3e42/src/runtime/string.go#L166) 函数如下所示：
+
+    ```go
+    func stringtoslicebyte(buf *tmpBuf, s string) []byte {
+        var b []byte
+        if buf != nil && len(s) <= len(buf) {
+            *buf = tmpBuf{}
+            b = buf[:len(s)]
+        } else {
+            b = rawbyteslice(len(s))
+        }
+        copy(b, s)
+        return b
+    }
+    ```
+
+在上述代码中，可以发现均用到了一个名为 `tmpBuf` 的变量，实质是一个预先创建的长度为 32 的数组，当所需空间大于该长度时，会额外进行一次内存分配。
 
 ```go
-func slicebytetostring(buf *tmpBuf, ptr *byte, n int) string {
-    if n == 0 {
-        return ""
-    }
-    if raceenabled {
-        racereadrangepc(unsafe.Pointer(ptr),
-            uintptr(n),
-            getcallerpc(),
-            abi.FuncPCABIInternal(slicebytetostring))
-    }
-    if msanenabled {
-        msanread(unsafe.Pointer(ptr), uintptr(n))
-    }
-    if asanenabled {
-        asanread(unsafe.Pointer(ptr), uintptr(n))
-    }
-    if n == 1 {
-        p := unsafe.Pointer(&staticuint64s[*ptr])
-        if goarch.BigEndian {
-            p = add(p, 7)
-        }
-        return unsafe.String((*byte)(p), 1)
-    }
+const tmpStringBufSize = 32
+type tmpBuf [tmpStringBufSize]byte
+```
 
-    var p unsafe.Pointer
-    if buf != nil && n <= len(buf) {
-        p = unsafe.Pointer(buf)
-    } else {
-        p = mallocgc(uintptr(n), nil, false)
+### 零拷贝转换
+
+在某些场景下，我们将 `[]byte` 强转为 `string`，仅仅是因为类型要求，此时编译器会做一定的优化，通过共享底层字节数据的方式来生成临时的字符串，避免额外的性能开销，在 [slicebytetostringtmp()](https://github.com/golang/go/blob/8960925ad8dd1ef234731d94ebbea263e35a3e42/src/runtime/string.go#L150) 函数中提供了实现，同时也备注了几种常见的场景：
+
+- 作为字典的 key 使用；
+- 字符串拼接；
+- 字符串比较。
+
+```go
+// slicebytetostringtmp returns a "string" referring to the actual []byte bytes.
+//
+// Callers need to ensure that the returned string will not be used after
+// the calling goroutine modifies the original slice or synchronizes with
+// another goroutine.
+//
+// The function is only called when instrumenting
+// and otherwise intrinsified by the compiler.
+//
+// Some internal compiler optimizations use this function.
+//   - Used for m[T1{... Tn{..., string(k), ...} ...}] and m[string(k)]
+//     where k is []byte, T1 to Tn is a nesting of struct and array literals.
+//   - Used for "<"+string(b)+">" concatenation where b is []byte.
+//   - Used for string(b)=="foo" comparison where b is []byte.
+func slicebytetostringtmp(ptr *byte, n int) string {
+    return unsafe.String(ptr, n)
+}
+```
+
+此外，当我们能够确保 `string` 与 `[]byte` 在共享底层字节数组时的安全性时，也可以手动实现如上的零拷贝方案来提升性能。
+
+在 [reflect](https://github.com/golang/go/blob/99ee616250e865ca8eff8a91bef3824038b411f1/src/reflect/value.go#L2832) 包定义了 `string` 和 `slice` 的运行时的结构：
+
+```go
+// Deprecated: Use unsafe.String or unsafe.StringData instead.
+type StringHeader struct {
+    Data uintptr
+    Len  int
+}
+
+// Deprecated: Use unsafe.Slice or unsafe.SliceData instead.
+type SliceHeader struct {
+    Data uintptr
+    Len  int
+    Cap  int
+}
+```
+
+我们可以通过手动构造如上结构体，实现类型的转换：
+
+```go
+func StringToBytes(s string) []byte {
+    stringHeader := (*reflect.StringHeader)(unsafe.Pointer(&s))
+    bh := reflect.SliceHeader{
+        Data: stringHeader.Data,
+        Len:  stringHeader.Len,
+        Cap:  stringHeader.Len,
     }
-    memmove(p, unsafe.Pointer(ptr), uintptr(n))
-    return unsafe.String((*byte)(p), n)
+    return *(*[]byte)(unsafe.Pointer(&bh))
+}
+func BytesToString(b []byte) string{
+    sliceHeader := (*reflect.SliceHeader)(unsafe.Pointer(&b))
+    sh := reflect.StringHeader{
+        Data: sliceHeader.Data,
+        Len:  sliceHeader.Len,
+    }
+    return *(*string)(unsafe.Pointer(&sh))
+}
+```
+
+在 1.20 版本，将如上结构体标注废弃，并在 [unsafe](https://github.com/golang/go/blob/99ee616250e865ca8eff8a91bef3824038b411f1/src/unsafe/unsafe.go#L241) 包中新增了接口用于获取 `string` 和 `slice` 底层的数据指针和构造方案：
+
+```go
+func Slice(ptr *ArbitraryType, len IntegerType) []ArbitraryType
+func SliceData(slice []ArbitraryType) *ArbitraryType
+func String(ptr *byte, len IntegerType) string
+func StringData(str string) *byte
+```
+
+此时，零拷贝的方案实现如下：
+
+```go
+func StringToBytes(s string) []byte {
+    return unsafe.Slice(unsafe.StringData(s), len(s))
+}
+
+func BytesToString(b []byte) string {
+    return unsafe.String(unsafe.SliceData(b), len(b))
 }
 ```
