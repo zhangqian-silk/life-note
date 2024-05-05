@@ -56,5 +56,3 @@
 ### Sonic
 
 > <https://pkg.go.dev/github.com/bytedance/sonic@v1.10.2>
-
-## Goland 插件配置
