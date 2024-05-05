@@ -264,7 +264,7 @@ func addComma(s string) string {
 
 ### 类型转换
 
-从底层数据结构上讲，字符串与字节切片底层都是字节数组，故而他们之间可以方便地相互转换。但是可变与不可变的限制，会导致产生了一些额外的内存消耗。
+从底层数据结构上讲，字符串与字节切片底层都是字节数组，故而他们之间可以方便地相互转换：
 
 ```go
 s := "hello"
@@ -272,7 +272,7 @@ b := []byte(s)
 t := string(b)
 ```
 
-当字节切片和字符串之间进行转化时，在保障底层数据一致的同时，还需要保障字节切片的可变性与字符串的不变性，所以一般都会创建一个原有字节数组的副本。
+但是在确保底层数据一致的同时，还需要保障字节切片的可变性与字符串的不变性，以及不会互相影响，所以一般都会创建一个原有字节数组的副本，这会带来额外的开销。
 
 - [slicebytetostring()](https://github.com/golang/go/blob/8960925ad8dd1ef234731d94ebbea263e35a3e42/src/runtime/string.go#L81) 函数如下所示：
 
@@ -317,7 +317,7 @@ t := string(b)
     }
     ```
 
-在上述代码中，可以发现均用到了一个名为 `tmpBuf` 的变量，实质是一个预先创建的长度为 32 的数组，当所需空间大于该长度时，会额外进行一次内存分配。
+在上述代码中，可以发现均用到了一个名为 `tmpBuf` 的变量，实质是一个预先创建的长度为 32 的数组，当所需空间较小时，会直接使用该缓冲区，当所需空间大于该长度时，会额外进行一次内存分配。
 
 ```go
 const tmpStringBufSize = 32
@@ -326,7 +326,7 @@ type tmpBuf [tmpStringBufSize]byte
 
 ### 零拷贝转换
 
-在某些场景下，我们将 `[]byte` 强转为 `string`，仅仅是因为类型要求，此时编译器会做一定的优化，通过共享底层字节数据的方式来生成临时的字符串，避免额外的性能开销，在 [slicebytetostringtmp()](https://github.com/golang/go/blob/8960925ad8dd1ef234731d94ebbea263e35a3e42/src/runtime/string.go#L150) 函数中提供了实现，同时也备注了几种常见的场景：
+在某些场景下，我们将 `[]byte` 强转为 `string`，仅仅是因为类型要求，并不会涉及到可变与不可变的差异，此时编译器会做一定的优化，通过共享底层字节数据的方式来生成临时的字符串，避免额外的性能开销，在 [slicebytetostringtmp()](https://github.com/golang/go/blob/8960925ad8dd1ef234731d94ebbea263e35a3e42/src/runtime/string.go#L150) 函数中提供了实现，同时也备注了几种常见的场景：
 
 - 作为字典的 key 使用；
 - 字符串拼接；
@@ -352,9 +352,30 @@ func slicebytetostringtmp(ptr *byte, n int) string {
 }
 ```
 
-此外，当我们能够确保 `string` 与 `[]byte` 在共享底层字节数组时的安全性时，也可以手动实现如上的零拷贝方案来提升性能。
+此外，在业务场景中，当我们能够确保 `string` 与 `[]byte` 在共享底层字节数组时的安全性时，也可以手动实现如上的零拷贝方案来提升性能。
 
-在 [reflect](https://github.com/golang/go/blob/99ee616250e865ca8eff8a91bef3824038b411f1/src/reflect/value.go#L2832) 包定义了 `string` 和 `slice` 的运行时的结构：
+Go 1.20 版本，[unsafe](https://github.com/golang/go/blob/99ee616250e865ca8eff8a91bef3824038b411f1/src/unsafe/unsafe.go#L241) 包中新增了接口用于获取 `string` 和 `slice` 底层的数据指针和构造方案：
+
+```go
+func Slice(ptr *ArbitraryType, len IntegerType) []ArbitraryType
+func SliceData(slice []ArbitraryType) *ArbitraryType
+func String(ptr *byte, len IntegerType) string
+func StringData(str string) *byte
+```
+
+此时，零拷贝的方案实现如下：
+
+```go
+func StringToBytes(s string) []byte {
+    return unsafe.Slice(unsafe.StringData(s), len(s))
+}
+
+func BytesToString(b []byte) string {
+    return unsafe.String(unsafe.SliceData(b), len(b))
+}
+```
+
+而在 1.20 之前的版本，则需要使用反射的方案进行处理，[reflect](https://github.com/golang/go/blob/99ee616250e865ca8eff8a91bef3824038b411f1/src/reflect/value.go#L2832) 包定义了 `string` 和 `slice` 的运行时的结构：
 
 ```go
 // Deprecated: Use unsafe.String or unsafe.StringData instead.
@@ -390,26 +411,5 @@ func BytesToString(b []byte) string{
         Len:  sliceHeader.Len,
     }
     return *(*string)(unsafe.Pointer(&sh))
-}
-```
-
-在 1.20 版本，将如上结构体标注废弃，并在 [unsafe](https://github.com/golang/go/blob/99ee616250e865ca8eff8a91bef3824038b411f1/src/unsafe/unsafe.go#L241) 包中新增了接口用于获取 `string` 和 `slice` 底层的数据指针和构造方案：
-
-```go
-func Slice(ptr *ArbitraryType, len IntegerType) []ArbitraryType
-func SliceData(slice []ArbitraryType) *ArbitraryType
-func String(ptr *byte, len IntegerType) string
-func StringData(str string) *byte
-```
-
-此时，零拷贝的方案实现如下：
-
-```go
-func StringToBytes(s string) []byte {
-    return unsafe.Slice(unsafe.StringData(s), len(s))
-}
-
-func BytesToString(b []byte) string {
-    return unsafe.String(unsafe.SliceData(b), len(b))
 }
 ```
