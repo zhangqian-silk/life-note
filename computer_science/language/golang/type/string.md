@@ -5,10 +5,6 @@
 
 ## 底层结构
 
-> <https://go.dev/src/runtime/string.go>
-> <https://go.dev/src/reflect/value.go>
-> <https://go.dev/src/unsafe/unsafe.go>
-
 字符串的底层数据结构包含了指向字节数组的指针和数组长度，在 `runtime` 包中，可以看到类似的内部使用的 `string` 的结构体 [stringStruct](https://github.com/golang/go/blob/960fa9bf66139e535d89934f56ae20a0e679e203/src/runtime/string.go#L232)：
 
 ```go
@@ -47,14 +43,14 @@ func String(ptr *byte, len IntegerType) string
 
 ```go
 s := "Hello, world!"
-fmt.Printf("%p\n", unsafe.StringData(s)) // 0x6c1b55
+fmt.Printf("%p\n", unsafe.StringData(s)) // "0x6c1b55"
 
 t := s
-fmt.Printf("%p\n", unsafe.StringData(t)) // 0x6c1b55 (与s一致)
+fmt.Printf("%p\n", unsafe.StringData(t)) // "0x6c1b55" (与s一致)
 
 s = "Hello"
-fmt.Printf("s:%s, %p", s, unsafe.StringData(s)) // s:Hello, 0x6c0af2
-fmt.Printf("t:%s, %p", t, unsafe.StringData(t)) // t:Hello, world!, 0x6c1b55
+fmt.Printf("s:%s, %p", s, unsafe.StringData(s)) // "s:Hello, 0x6c0af2"
+fmt.Printf("t:%s, %p", t, unsafe.StringData(t)) // "t:Hello, world!, 0x6c1b55"
 ```
 
 ## 字面量
@@ -170,23 +166,23 @@ func (s *scanner) rawString() {
 s := "Hello, world!"
 fmt.Println(len(s)) // "12"
 fmt.Println(s[0], s[7]) // "72 119" ('H' and 'w')
-s[0] = "h" // compile error: cannot assign to s[0]
+s[0] = "h" // compile error
 ```
 
 也可通过 `s[i:j]` 生成 s 第 i 个字节到第 j 个字节（不包含 j）的子串，满足 $0 \leq i \leq j \leq len(s)$。当没有指定 i 或者 j 时，默认值分别为 `0` 和 `len(s)`。同样得益于字符串不允许被修改的特性，所有子串均可以安全地共享相同的字符数组，避免了额外的开销：
 
 ```go
 s := "Hello, world!"
-fmt.Printf("s:%s, %p\n", s, unsafe.StringData(s)) // s:Hello, world!, 0x281b56
+fmt.Printf("s:%s, %p\n", s, unsafe.StringData(s)) // "s:Hello, world!, 0x281b56"
 
 s0 := s[:4]
-fmt.Printf("s[:4]:%s, %p\n", s0, unsafe.StringData(s0)) // s[:4]:Hell, 0x281b56 (与s一致)
+fmt.Printf("s[:4]:%s, %p\n", s0, unsafe.StringData(s0)) // "s[:4]:Hell, 0x281b56" (与s一致)
 
 s1 := s[1:4]
-fmt.Printf("s[1:4]:%s, %p\n", s1, unsafe.StringData(s1)) // s[1:4]:ell, 0x281b57 (偏移量为 57-56=1)
+fmt.Printf("s[1:4]:%s, %p\n", s1, unsafe.StringData(s1)) // "s[1:4]:ell, 0x281b57" (偏移量为 57-56=1)
 
 s2 := s[2:4]
-fmt.Printf("s[2:4]:%s, %p\n", s2, unsafe.StringData(s2)) // s[2:4]:ll, 0x281b58 (偏移量为 58-56=2)
+fmt.Printf("s[2:4]:%s, %p\n", s2, unsafe.StringData(s2)) // "s[2:4]:ll, 0x281b58" (偏移量为 58-56=2)
 ```
 
 ## 运算
@@ -196,7 +192,7 @@ fmt.Printf("s[2:4]:%s, %p\n", s2, unsafe.StringData(s2)) // s[2:4]:ll, 0x281b58 
 ```go
 s := "abcde"
 t := "bbcde"
-fmt.Println(s <= t) // true
+fmt.Println(s <= t) // "true"
 ```
 
 也支持使用 `+` 来进行字符串拼接：
@@ -204,7 +200,7 @@ fmt.Println(s <= t) // true
 ```go
 s := "Hello"
 s += ", world!"
-fmt.Println(s) // Hello, world!
+fmt.Println(s) // "Hello, world!"
 ```
 
 ## Byte Slice
