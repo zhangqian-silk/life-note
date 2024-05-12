@@ -28,10 +28,51 @@ Unicode，全称为 Unicode 标准（The Unicode Standard），是为了解决�
 
 UTF-8（8-bit Unicode Transformation Format）是一种针对 Unicode 的可变长度字符编码，也是一种前缀码。变长的特性，一方面可以节省内存使用，另一方面则可以同时兼容 ASCII 码，目前已是互联网最主要的编码方式。
 
-UTF-8 编码字节含义如下：
+### 编码方式
 
-- 对于UTF-8编码中的任意字节B，如果B的第一位为0，则B独立的表示一个字符(ASCII码)；
-- 如果B的第一位为1，第二位为0，则B为一个多字节字符中的一个字节(非ASCII字符)；
-- 如果B的前两位为1，第三位为0，则B为两个字节表示的字符中的第一个字节；
-- 如果B的前三位为1，第四位为0，则B为三个字节表示的字符中的第一个字节；
-- 如果B的前四位为1，第五位为0，则B为四个字节表示的字符中的第一个字节；
+UTF-8 编码方式如下：
+
+- 单字节字符，首位为 0，与 ASCII 码完全一致；
+- 多字节字符，假设为 n 位(n>1)，则第一个字节前 n 位为 1，第 n+1 位为 0，后面字节的前两位为 10，其余空位填充 unicode 码，高位用 0 补齐。
+
+因此，UTF-8 编码会形成如下特征：
+
+- 0xxxxxxx
+- 110xxxxx 10xxxxxx
+- 1110xxxx 10xxxxxx 10xxxxxx
+- 11110xxx 10xxxxxx 10xxxxxx 10xxxxxx
+
+此时，不难判断出字节的识别方式：
+
+- 0xxxxxxx：如果B的第一位为0，则B独立的表示一个字符(ASCII码)；
+- 10xxxxxx：如果B的第一位为1，第二位为0，则B为一个多字节字符中的一个字节(非ASCII字符)；
+- 110xxxxx：如果B的前两位为1，第三位为0，则B为两个字节表示的字符中的第一个字节；
+- 1110xxxx：如果B的前三位为1，第四位为0，则B为三个字节表示的字符中的第一个字节；
+- 11110xxx：如果B的前四位为1，第五位为0，则B为四个字节表示的字符中的第一个字节；
+
+## Percent Encoding
+
+> [wiki/百分比编码](https://zh.wikipedia.org/wiki/%E7%99%BE%E5%88%86%E5%8F%B7%E7%BC%96%E7%A0%81)
+> [[rfc3986] Uniform Resource Identifier (URI): Generic Syntax](https://datatracker.ietf.org/doc/html/rfc3986)
+
+百分比编码(Percent-encoding)，又称作 URL 编码(URL encoding)，是 URL 和 URL 的一种特定的编码机制。
+
+### 编码方式
+
+先按照指定的编码方式（一般是 UTF-8）将字符转为 16 进制字节流，然后在每个字节前添加 `%` 来构成一个百分比编码。例如：
+
+- 字符：中文
+- UTF-8：\xe4\xb8\xad\xe6\x96\x87
+- Percent Encoding：%E4%B8%AD%E6%96%87
+
+### 字符类型
+
+RFC 中声明了 URI 与 URL 中所能使用的字符集合，可分为具备分割意义的保留字符，和没有特殊含义的非保留字符。在该数据集意外的字符，均必须使用百分比编码表示。
+
+- RFC 3986 section 2.2 保留字符 （2005年1月）：
+    ! * ' ( ) ; : @ & = + $ , / ? # [ ]
+  
+- RFC 3986 section 2.3 未保留字符 （2005年1月）：
+    A B C D E F G H I J K L M N O P Q R S T U V W X Y Z
+    a b c d e f g h i j k l m n o p q r s t u v w x y z
+    0 1 2 3 4 5 6 7 8 9 - _ . ~
