@@ -472,3 +472,40 @@ func growslice(oldPtr unsafe.Pointer, newLen, oldCap, num int, et *_type) slice 
 ```
 
 在上述所有流程执行完毕后，会返回一个扩容后的、包含了旧切片所有元素的新的切片，原 `append` 函数正常执行赋值逻辑即可。
+
+### 拷贝
+
+在使用内置函数进行切片拷贝时，会调用到 [skucecopy](https://github.com/golang/go/blob/1667dbd7be0da5e75a25f14c339c859ed2190b43/src/runtime/slice.go#L325) 函数进行处理，函数内部对切片长度做了安全判断，将一个长度较大的切片，拷贝至长度较小的切片时，最终进行拷贝时，会以较小的值为基准进行操作，即使小切片的容量足够大，也仅会按照实际元素含量进行处理，自然也不会触发扩容相关操作。
+
+```go
+// slicecopy is used to copy from a string or slice of pointerless elements into a slice.
+func slicecopy(toPtr unsafe.Pointer, toLen int, fromPtr unsafe.Pointer, fromLen int, width uintptr) int {
+    if fromLen == 0 || toLen == 0 {
+        return 0
+    }
+
+    n := fromLen
+    if toLen < n {
+        n = toLen
+    }
+
+    size := uintptr(n) * width
+
+    if size == 1 { // common case worth about 2x to do here
+        // TODO: is this still worth it with new memmove impl?
+        *(*byte)(toPtr) = *(*byte)(fromPtr) // known to be a byte pointer
+    } else {
+        memmove(toPtr, fromPtr, size)
+    }
+    return n
+}
+```
+
+例如，将含有 5 个元素的切片 `s1` 拷贝至长度为 3、容量为 5 的切片 `s2` 时，最终拷贝后的切片 `s2` 也仅包含 `s1` 前三个元素：
+
+```go
+s1 := []int{1, 2, 3, 4, 5}
+s2 := make([]int, 3, 5)
+copy(s2, s1)
+fmt.Println(s2) // "[1 2 3]"
+```
