@@ -155,7 +155,7 @@ type mapextra struct {
 
 当 `bmap` 中不包含指针时，即 key 和 elem 均不包含指针，overflow 类型为 `uintptr`，`hmap.extra` 中的 `overflow` 和 `oldoverflow` 字段，会分别引用 `hmap.buckets` 和 `hmap.oldbuckets` 中的溢出桶。
 
-`nextOverFlow` 字段，则用于在内存预分配时，临时引用溢出桶链表
+`nextOverFlow` 字段，则用于在内存预分配时，引用溢出桶数组中首个可用的溢出桶，并在之后使用的过程中，保持动态更新
 
 ## 初始化
 
@@ -365,21 +365,23 @@ func makemap(t *maptype, hint int, h *hmap) *hmap {
 - 最终通过分配的数组长度来判断是否存在溢出桶，并分别返回普通桶的数组地址和溢出桶的数组地址
 - 除此以外，还额外将最后一个溢出桶的 `overflow` 指针，指向了第一个普通桶，其他溢出桶的 `overflow` 指针均为 `nil`，这个差异会用于判断当前是否还有空余的溢出桶
 
-```go
-func makeBucketArray(t *maptype, b uint8, dirtyalloc unsafe.Pointer) (buckets unsafe.Pointer, nextOverflow *bmap) {
-    ...
-    if base != nbuckets {
-        nextOverflow = (*bmap)(add(buckets, base*uintptr(t.BucketSize)))
-        last := (*bmap)(add(buckets, (nbuckets-1)*uintptr(t.BucketSize)))
-        last.setoverflow(t, (*bmap)(buckets))
+    ```go
+    func makeBucketArray(t *maptype, b uint8, dirtyalloc unsafe.Pointer) (buckets unsafe.Pointer, nextOverflow *bmap) {
+        ...
+        if base != nbuckets {
+            nextOverflow = (*bmap)(add(buckets, base*uintptr(t.BucketSize)))
+            last := (*bmap)(add(buckets, (nbuckets-1)*uintptr(t.BucketSize)))
+            last.setoverflow(t, (*bmap)(buckets))
+        }
+        return buckets, nextOverflow
     }
-    return buckets, nextOverflow
-}
-```
+    ```
 
 ## 数据处理
 
 ### 新增 & 修改数据
+
+#### [mapassign](https://github.com/golang/go/blob/377646589d5fb0224014683e0d1f1db35e60c3ac/src/runtime/map.go#L614) 函数
 
 新增或是修改数据，均通过 `m[k] = v` 的方式进行：
 
@@ -390,7 +392,14 @@ m["key_1"] = 100
 fmt.Println(m) // "map[key_1:100 key_2:2]"
 ```
 
-在底层，则是通过 [mapassign](https://github.com/golang/go/blob/377646589d5fb0224014683e0d1f1db35e60c3ac/src/runtime/map.go#L614) 函数实现相关功能。
+在底层，则是通过 [mapassign](https://github.com/golang/go/blob/377646589d5fb0224014683e0d1f1db35e60c3ac/src/runtime/map.go#L614) 函数实现相关功能：
+
+- 判断 key 是否已经存在，若存在则修改 value 值
+- 若 key 不存在，则寻找可插入新数据的位置
+- 若不存在可插入位置，则触发扩容或是新增溢出桶进行存储
+- 最终返回 value 对象对应的指针，由函数调用方进行修改
+
+函数详细介绍如下：
 
 - 预处理：
   - 校验哈希表本身的初始化
@@ -536,48 +545,110 @@ fmt.Println(m) // "map[key_1:100 key_2:2]"
     ```
 
 - 执行数据插入逻辑
-  - 判断 key 和 value 是否是间接引用，若是，则创建对应类型的新的对象，并将地址保存至所要插入的位置处
-  - 更新 key 对应的值（最终会返回 value 对应的指针，再外部更新 value 的值）
+  - 判断 key 和 value 是否是间接引用，若是，则创建对应类型的新的对象，并将地址保存至所要插入的位置处，然后更新 key 的指针为实际存储 key 对应地址的指针（value 对应的指针在函数 `done` 代码块中会统一处理）
+  - 更新 key 对应的值（最终会返回 value 对应的指针，在外部更新 value 的值）
   - 更新 key 的索引的值，即 `tophash` 的值
   - 修改哈希表中元素个数
 
-```go
-func mapassign(t *maptype, h *hmap, key unsafe.Pointer) unsafe.Pointer {
-    ...
-    // store new key/elem at insert position
-    if t.IndirectKey() {
-        kmem := newobject(t.Key)
-        *(*unsafe.Pointer)(insertk) = kmem
-        insertk = kmem
+    ```go
+    func mapassign(t *maptype, h *hmap, key unsafe.Pointer) unsafe.Pointer {
+        ...
+        // store new key/elem at insert position
+        if t.IndirectKey() {2
+            kmem := newobject(t.Key)
+            *(*unsafe.Pointer)(insertk) = kmem
+            insertk = kmem
+        }
+        if t.IndirectElem() {
+            vmem := newobject(t.Elem)
+            *(*unsafe.Pointer)(elem) = vmem
+        }
+        typedmemmove(t.Key, insertk, key)
+        *inserti = top
+        h.count++
+        ...
     }
-    if t.IndirectElem() {
-        vmem := newobject(t.Elem)
-        *(*unsafe.Pointer)(elem) = vmem
-    }
-    typedmemmove(t.Key, insertk, key)
-    *inserti = top
-    h.count++
-    ...
-}
-```
+    ```
 
 - 最终参数处理
-  - 判断并发写冲突，panic
-  - 清除 `hashWriting` 状态位
+  - 判断并发写冲突
+  - 清除 `hashWriting` 状态位，标记写入完成
   - 更新 value 指针，最终返回 value 实际存储的地址对应的指针，用于外部修改 value
 
+    ```go
+    func mapassign(t *maptype, h *hmap, key unsafe.Pointer) unsafe.Pointer {
+        ...
+    done:
+        if h.flags&hashWriting == 0 {
+            fatal("concurrent map writes")
+        }
+        h.flags &^= hashWriting
+        if t.IndirectElem() {
+            elem = *((*unsafe.Pointer)(elem))
+        }
+        return elem
+    }
+    ```
+
+#### [newoverflow](https://github.com/golang/go/blob/13c49096fd3b08ef53742dd7ae8bcfbfa45f3173/src/runtime/map.go#L239) 函数
+
+一个哈希桶中最多可以存放 8 个元素，当哈希冲突超过这个数值时，需要使用溢出桶来存放新增元素。当需要新增溢出桶时，会通过 [newoverflow](https://github.com/golang/go/blob/13c49096fd3b08ef53742dd7ae8bcfbfa45f3173/src/runtime/map.go#L239) 函数处理相关逻辑。
+
+- 创建溢出桶
+  - 优先判断哈希表中的 `extra.nextOverflow` 指针是否为空，若非空，则说明创建哈希表时，预分配的溢出桶还存在，可以直接使用
+  - 若在使用了该溢出桶后，还有剩余，则动态更新 `extra.nextOverflow` 指针，指向下一个可用的溢出桶
+  - 若当前溢出桶为预分配的最后一个，即 `overflow` 指针非空（初始化时，最后一个溢出桶的 `overflow` 指针会指向第一个普通桶，其他溢出桶的 `overflow` 指针为空），则将其 `overflow` 指针重新置为空值，用于后续链接其他溢出桶，并将哈希表中的 `extra.nextOverflow` 指针置为空值，表示当前预分配的溢出桶，已全部消耗
+  - 若当前不存在可用的溢出桶，则直接创建
+
 ```go
-func mapassign(t *maptype, h *hmap, key unsafe.Pointer) unsafe.Pointer {
+func (h *hmap) newoverflow(t *maptype, b *bmap) *bmap {
+    var ovf *bmap
+    if h.extra != nil && h.extra.nextOverflow != nil {
+        // We have preallocated overflow buckets available.
+        // See makeBucketArray for more details.
+        ovf = h.extra.nextOverflow
+        if ovf.overflow(t) == nil {
+            // We're not at the end of the preallocated overflow buckets. Bump the pointer.
+            h.extra.nextOverflow = (*bmap)(add(unsafe.Pointer(ovf), uintptr(t.BucketSize)))
+        } else {
+            // This is the last preallocated overflow bucket.
+            // Reset the overflow pointer on this bucket,
+            // which was set to a non-nil sentinel value.
+            ovf.setoverflow(t, nil)
+            h.extra.nextOverflow = nil
+        }
+    } else {
+        ovf = (*bmap)(newobject(t.Bucket))
+    }
     ...
-done:
-    if h.flags&hashWriting == 0 {
-        fatal("concurrent map writes")
+}
+
+```
+
+- 更新溢出桶相关配置
+  - 更新哈希表的溢出桶计数，即 `noverflow` 字段，用于扩容等逻辑使用
+  - 当哈希表中的 key 和 value 不包含指针时，额外修改 `extra.overflow` 字段，将该溢出桶添加进去，避免被 GC 回收
+  - 最后将该溢出桶链接在原本的桶链表上，返回溢出桶指针
+
+```go
+func (h *hmap) newoverflow(t *maptype, b *bmap) *bmap {
+    ...
+    h.incrnoverflow()
+    if !t.Bucket.Pointers() {
+        h.createOverflow()
+        *h.extra.overflow = append(*h.extra.overflow, ovf)
     }
-    h.flags &^= hashWriting
-    if t.IndirectElem() {
-        elem = *((*unsafe.Pointer)(elem))
+    b.setoverflow(t, ovf)
+    return ovf
+}
+
+func (h *hmap) createOverflow() {
+    if h.extra == nil {
+        h.extra = new(mapextra)
     }
-    return elem
+    if h.extra.overflow == nil {
+        h.extra.overflow = new([]*bmap)
+    }
 }
 ```
 
