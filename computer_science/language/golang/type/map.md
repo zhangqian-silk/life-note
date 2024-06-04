@@ -381,8 +381,6 @@ func makemap(t *maptype, hint int, h *hmap) *hmap {
 
 ### 新增 & 修改数据
 
-#### [mapassign](https://github.com/golang/go/blob/377646589d5fb0224014683e0d1f1db35e60c3ac/src/runtime/map.go#L614) 函数
-
 新增或是修改数据，均通过 `m[k] = v` 的方式进行：
 
 ```go
@@ -398,6 +396,8 @@ fmt.Println(m) // "map[key_1:100 key_2:2]"
 - 若 key 不存在，则寻找可插入新数据的位置
 - 若不存在可插入位置，则触发扩容或是新增溢出桶进行存储
 - 最终返回 value 对象对应的指针，由函数调用方进行修改
+
+#### [mapassign](https://github.com/golang/go/blob/377646589d5fb0224014683e0d1f1db35e60c3ac/src/runtime/map.go#L614) 函数
 
 函数详细介绍如下：
 
@@ -546,7 +546,7 @@ fmt.Println(m) // "map[key_1:100 key_2:2]"
 
 - 执行数据插入逻辑
   - 判断 key 和 value 是否是间接引用，若是，则创建对应类型的新的对象，并将地址保存至所要插入的位置处，然后更新 key 的指针为实际存储 key 对应地址的指针（value 对应的指针在函数 `done` 代码块中会统一处理）
-  - 更新 key 对应的值（最终会返回 value 对应的指针，在外部更新 value 的值）
+  - 更新 key 对应的值（如果值未发生改变，则不做处理，对于 value，最终会返回 value 对应的指针，在外部进行更新）
   - 更新 key 的索引的值，即 `tophash` 的值
   - 修改哈希表中元素个数
 
@@ -600,60 +600,187 @@ fmt.Println(m) // "map[key_1:100 key_2:2]"
   - 若当前溢出桶为预分配的最后一个，即 `overflow` 指针非空（初始化时，最后一个溢出桶的 `overflow` 指针会指向第一个普通桶，其他溢出桶的 `overflow` 指针为空），则将其 `overflow` 指针重新置为空值，用于后续链接其他溢出桶，并将哈希表中的 `extra.nextOverflow` 指针置为空值，表示当前预分配的溢出桶，已全部消耗
   - 若当前不存在可用的溢出桶，则直接创建
 
-```go
-func (h *hmap) newoverflow(t *maptype, b *bmap) *bmap {
-    var ovf *bmap
-    if h.extra != nil && h.extra.nextOverflow != nil {
-        // We have preallocated overflow buckets available.
-        // See makeBucketArray for more details.
-        ovf = h.extra.nextOverflow
-        if ovf.overflow(t) == nil {
-            // We're not at the end of the preallocated overflow buckets. Bump the pointer.
-            h.extra.nextOverflow = (*bmap)(add(unsafe.Pointer(ovf), uintptr(t.BucketSize)))
+    ```go
+    func (h *hmap) newoverflow(t *maptype, b *bmap) *bmap {
+        var ovf *bmap
+        if h.extra != nil && h.extra.nextOverflow != nil {
+            // We have preallocated overflow buckets available.
+            // See makeBucketArray for more details.
+            ovf = h.extra.nextOverflow
+            if ovf.overflow(t) == nil {
+                // We're not at the end of the preallocated overflow buckets. Bump the pointer.
+                h.extra.nextOverflow = (*bmap)(add(unsafe.Pointer(ovf), uintptr(t.BucketSize)))
+            } else {
+                // This is the last preallocated overflow bucket.
+                // Reset the overflow pointer on this bucket,
+                // which was set to a non-nil sentinel value.
+                ovf.setoverflow(t, nil)
+                h.extra.nextOverflow = nil
+            }
         } else {
-            // This is the last preallocated overflow bucket.
-            // Reset the overflow pointer on this bucket,
-            // which was set to a non-nil sentinel value.
-            ovf.setoverflow(t, nil)
-            h.extra.nextOverflow = nil
+            ovf = (*bmap)(newobject(t.Bucket))
         }
-    } else {
-        ovf = (*bmap)(newobject(t.Bucket))
+        ...
     }
-    ...
-}
 
-```
+    ```
 
 - 更新溢出桶相关配置
   - 更新哈希表的溢出桶计数，即 `noverflow` 字段，用于扩容等逻辑使用
   - 当哈希表中的 key 和 value 不包含指针时，额外修改 `extra.overflow` 字段，将该溢出桶添加进去，避免被 GC 回收
   - 最后将该溢出桶链接在原本的桶链表上，返回溢出桶指针
 
-```go
-func (h *hmap) newoverflow(t *maptype, b *bmap) *bmap {
-    ...
-    h.incrnoverflow()
-    if !t.Bucket.Pointers() {
-        h.createOverflow()
-        *h.extra.overflow = append(*h.extra.overflow, ovf)
+    ```go
+    func (h *hmap) newoverflow(t *maptype, b *bmap) *bmap {
+        ...
+        h.incrnoverflow()
+        if !t.Bucket.Pointers() {
+            h.createOverflow()
+            *h.extra.overflow = append(*h.extra.overflow, ovf)
+        }
+        b.setoverflow(t, ovf)
+        return ovf
     }
-    b.setoverflow(t, ovf)
-    return ovf
-}
 
-func (h *hmap) createOverflow() {
-    if h.extra == nil {
-        h.extra = new(mapextra)
+    func (h *hmap) createOverflow() {
+        if h.extra == nil {
+            h.extra = new(mapextra)
+        }
+        if h.extra.overflow == nil {
+            h.extra.overflow = new([]*bmap)
+        }
     }
-    if h.extra.overflow == nil {
-        h.extra.overflow = new([]*bmap)
-    }
-}
-```
+    ```
 
-### 访问数据
+### 读取数据
+
+可以通过哈希表的下标 `m[key]` 来获取指定 key 所对应的 value，返回值有两种形式：
+
+- 当接受一个参数时，会返回读取结果，如果 key 不存在，则返回 value 元素类型的零值
+- 当接受两个参数时，还会额外返回一个布尔值，标记 key 是否存在
+
+    ```go
+    m := map[string]int{"key_1": 1}
+    res1 := m["key_1"]
+    res2, ok := m["key_2"]
+    fmt.Println(res1, res2, ok) // "1 0 false"
+    ```
+
+两种形式在底层实现分别为 [mapaccess1](https://github.com/golang/go/blob/eaa7d9ff86b35c72cc35bd7c14b349fa414c392f/src/runtime/map.go#L409) 和 [mapaccess2](https://github.com/golang/go/blob/eaa7d9ff86b35c72cc35bd7c14b349fa414c392f/src/runtime/map.go#L479C6-L479C16)，唯一的差异点仅在于返回值。函数内部主要功能为查找 key 所对应的值，与写操作时的逻辑基本一致。
+
+#### [mapaccess2](https://github.com/golang/go/blob/eaa7d9ff86b35c72cc35bd7c14b349fa414c392f/src/runtime/map.go#L479C6-L479C16)
+
+以 `mapaccess2` 函数为例，详细介绍如下：
+
+- 预处理
+  - 判空处理，如果 map 未进行初始化，或内部元素数量为 0，则直接返回默认值
+  - 标记位校验，判断并发读写问题
+
+    ```go
+    func mapaccess2(t *maptype, h *hmap, key unsafe.Pointer) (unsafe.Pointer, bool) {
+        ...
+        if h == nil || h.count == 0 {
+            if err := mapKeyError(t, key); err != nil {
+                panic(err) // see issue 23734
+            }
+            return unsafe.Pointer(&zeroVal[0]), false
+        }
+        if h.flags&hashWriting != 0 {
+            fatal("concurrent map read and map write")
+        }
+        ...
+    }
+    ```
+
+- 确认 key 对应的哈希值以及哈希桶
+  - 计算 hash 值，并获取低 B 位哈希值和高 8 哈希值
+  - 通过低 B 位哈希值获取哈希桶
+  - 如果哈希桶正在扩容，则根据扩容类型，重新定位旧桶的地址
+  - 如果扩容期间，旧桶中的数据未完成迁移，则将哈希桶地址修改为旧桶地址，从旧桶中查找
+
+    ```go
+    func mapaccess2(t *maptype, h *hmap, key unsafe.Pointer) (unsafe.Pointer, bool) {
+        ...
+        hash := t.Hasher(key, uintptr(h.hash0))
+        m := bucketMask(h.B)
+        b := (*bmap)(add(h.buckets, (hash&m)*uintptr(t.BucketSize)))
+        if c := h.oldbuckets; c != nil {
+            if !h.sameSizeGrow() {
+                // There used to be half as many buckets; mask down one more power of two.
+                m >>= 1
+            }
+            oldb := (*bmap)(add(c, (hash&m)*uintptr(t.BucketSize)))
+            if !evacuated(oldb) {
+                b = oldb
+            }
+        }
+        top := tophash(hash)
+        ...
+    }
+    ```
+
+- 遍历哈希桶，寻找对应的 key 值
+  - 通过 `for` 循环遍历当前哈希桶以及溢出桶（溢出桶以链表的形式相互连接）
+  - 在 `tophash` 不一致时，判断当前桶中的 `tophash` 是否为 `emptyRest` 状态位，如果是的话，说明后续空间均为空，直接结束循环
+  - 在 `tophash` 一致时，对比 key 值，判断是否找到真正的 key，如果不一致则进行下一次循环
+  - 在 `tophash` 一致，且 key 值一致时，返回相对应的 value 值
+
+    ```go
+    func mapaccess2(t *maptype, h *hmap, key unsafe.Pointer) (unsafe.Pointer, bool) {
+        ...
+    bucketloop:
+        for ; b != nil; b = b.overflow(t) {
+            for i := uintptr(0); i < abi.MapBucketCount; i++ {
+                if b.tophash[i] != top {
+                    if b.tophash[i] == emptyRest {
+                        break bucketloop
+                    }
+                    continue
+                }
+                k := add(unsafe.Pointer(b), dataOffset+i*uintptr(t.KeySize))
+                if t.IndirectKey() {
+                    k = *((*unsafe.Pointer)(k))
+                }
+                if t.Key.Equal(key, k) {
+                    e := add(unsafe.Pointer(b), dataOffset+abi.MapBucketCount*uintptr(t.KeySize)+i*uintptr(t.ValueSize))
+                    if t.IndirectElem() {
+                        e = *((*unsafe.Pointer)(e))
+                    }
+                    return e, true
+                }
+            }
+        }
+        return unsafe.Pointer(&zeroVal[0]), false
+    }
+    ```
+
+#### For Range
+
+此外，哈希表同样支持 `for range` 进行遍历：
+
+- 每次遍历可以拿到对应的 key 和 value
+- 遍历的顺序是无序的
+
+    ```go
+    m := map[string]int{"key_1": 1, "key_2": 2}
+    for key, v := range m {
+        fmt.Println(key, v)
+    }
+    // "key_2 2"
+    // "key_1 1"
+    ```
 
 ### 删除数据
+
+对于 map 中特定 key 值的删除操作，通过 `delete` 函数实现，函数内部对于 key 是否存在等情况做了判断，会保障调用该函数后，map 中一定不存在指定的 key，该函数也没有返回值来标记操作结果。
+
+```go
+m := map[string]int{"key_1": 1, "key_2": 2}
+fmt.Println(m) // "map[key_1:1 key_2:2]"
+delete(m, "key_1")
+fmt.Println(m) // "map[key_2:2]"
+```
+
+底层通过 [mapdelete](https://github.com/golang/go/blob/499de42188ee0b0680aec4c49e25594456fdf15a/src/runtime/map.go#L741) 函数来实现相关能力，核心逻辑与读、写操作较为一致，均是通过哈希值定位哈希桶，再通过遍历找到 key 值，但是在找到 key 值并删除数据的基础上，还进行了很多优化处理。
 
 ## 扩容
