@@ -354,7 +354,7 @@ func makemap(t *maptype, hint int, h *hmap) *hmap {
             size := t.Bucket.Size_ * nbuckets
             if t.Bucket.Pointers() {
                 memclrHasPointers(buckets, size)
-            } else {12
+            } else {
                 memclrNoHeapPointers(buckets, size)
             }
         }
@@ -695,8 +695,8 @@ fmt.Println(m) // "map[key_1:100 key_2:2]"
 - 确认 key 对应的哈希值以及哈希桶
   - 计算 hash 值，并获取低 B 位哈希值和高 8 哈希值
   - 通过低 B 位哈希值获取哈希桶
-  - 如果哈希桶正在扩容，则根据扩容类型，重新定位旧桶的地址
-  - 如果扩容期间，旧桶中的数据未完成迁移，则将哈希桶地址修改为旧桶地址，从旧桶中查找
+  - 如果哈希桶正在扩容，则根据扩容类型，定位旧桶的地址，且如果旧桶中的数据未完成迁移，则将哈希桶地址修改为旧桶地址，从旧桶中查找
+  - 需要注意的是，读操作不会等待扩容完成
 
     ```go
     func mapaccess2(t *maptype, h *hmap, key unsafe.Pointer) (unsafe.Pointer, bool) {
@@ -782,5 +782,237 @@ fmt.Println(m) // "map[key_2:2]"
 ```
 
 底层通过 [mapdelete](https://github.com/golang/go/blob/499de42188ee0b0680aec4c49e25594456fdf15a/src/runtime/map.go#L741) 函数来实现相关能力，核心逻辑与读、写操作较为一致，均是通过哈希值定位哈希桶，再通过遍历找到 key 值，但是在找到 key 值并删除数据的基础上，还进行了很多优化处理。
+
+#### [mapdelete](https://github.com/golang/go/blob/499de42188ee0b0680aec4c49e25594456fdf15a/src/runtime/map.go#L741)
+
+函数逻辑介绍如下所示：
+
+- 预处理：
+  - 判空处理
+  - 并发标记位处理
+
+    ```go
+    func mapdelete(t *maptype, h *hmap, key unsafe.Pointer) {
+        ...
+        if h == nil || h.count == 0 {
+            if err := mapKeyError(t, key); err != nil {
+                panic(err) // see issue 23734
+            }
+            return
+        }
+        if h.flags&hashWriting != 0 {
+            fatal("concurrent map writes")
+        }
+        ...
+    }
+    ```
+
+- 参数初始化：
+  - 初始化哈希值，并找到对应的桶号
+  - 如果正则扩容，则等待扩容迁移操作完成
+  - 确认哈希桶地址与高位哈希值
+
+    ```go
+    func mapdelete(t *maptype, h *hmap, key unsafe.Pointer) {
+        ...
+        hash := t.Hasher(key, uintptr(h.hash0))
+
+        // Set hashWriting after calling t.hasher, since t.hasher may panic,
+        // in which case we have not actually done a write (delete).
+        h.flags ^= hashWriting
+
+        bucket := hash & bucketMask(h.B)
+        if h.growing() {
+            growWork(t, h, bucket)
+        }
+        b := (*bmap)(add(h.buckets, bucket*uintptr(t.BucketSize)))
+        bOrig := b
+        top := tophash(hash)
+        ...
+    }
+    ```
+
+- 查找目标元素：
+  - 哈希桶与溢出桶以链表的方式连接，故通过两层循环遍历所有数据
+  - 遍历时优先比较高位哈希，不匹配时判断下此处的高位哈希是否为 `emptyRest` 状态位（表示当前以及后续均为空），如果是，则结束遍历，否则继续遍历操作
+  - 高位哈希值匹配成功后，再真正比较 key 值是否相等，如果相等，则执行后续删除逻辑，否则继续遍历操作
+
+    ```go
+    func mapdelete(t *maptype, h *hmap, key unsafe.Pointer) {
+        ...
+        search:
+        for ; b != nil; b = b.overflow(t) {
+            for i := uintptr(0); i < abi.MapBucketCount; i++ {
+                if b.tophash[i] != top {
+                    if b.tophash[i] == emptyRest {
+                        break search
+                    }
+                    continue
+                }
+                k := add(unsafe.Pointer(b), dataOffset+i*uintptr(t.KeySize))
+                k2 := k
+                if t.IndirectKey() {
+                    k2 = *((*unsafe.Pointer)(k2))
+                }
+                if !t.Key.Equal(key, k2) {
+                    continue
+                }
+                ...
+            }
+        }
+        ...
+    }
+    ```
+
+- 删除目标元素：
+  - 对于 key，只对指针本身进行处理，最终的数据由 GC 进行清理，不包含指针的场景则不做处理，可以直接进行覆盖
+  - 对于 value，除了清理指针以外，非指针的数据也会进行清空
+  - 设置标记位，表示当前位置为空，可以直接写入
+  - 值得注意的是，如果 key 值不包含指针，并没有进行清空处理
+    - 在写入新元素的 key 时，使用 `typedmemmove` 函数进行处理，函数内部对覆盖前后的数据有做判等处理
+    - 此时，删除时优化了一次清理操作，推迟至写入时进行覆盖，如果下次写入的 key 值与该位置未清理的 key 值相等，则进一步优化一次覆盖操作
+    - 对于 hashmap 来说，一方面本身对 key 做了 hash 处理，会尽可能减少冲突的可能性，所以写入同一个 hash 桶中的元素有一定相等的可能性
+    - 另一方面从业务上讲，大部分 hashmap 实例中，key 的取值其实是可穷举的，进一步加大了 key 值重复的可能性
+    - 而对于 value 而言，猜测是重复的概率极低，故没有通过上述方案进行处理
+
+    ```go
+    func mapdelete(t *maptype, h *hmap, key unsafe.Pointer) {
+        ...
+        search:
+        for ; b != nil; b = b.overflow(t) {
+            for i := uintptr(0); i < abi.MapBucketCount; i++ {
+                ...
+                // Only clear key if there are pointers in it.
+                if t.IndirectKey() {
+                    *(*unsafe.Pointer)(k) = nil
+                } else if t.Key.Pointers() {
+                    memclrHasPointers(k, t.Key.Size_)
+                }
+                e := add(unsafe.Pointer(b), dataOffset+abi.MapBucketCount*uintptr(t.KeySize)+i*uintptr(t.ValueSize))
+                if t.IndirectElem() {
+                    *(*unsafe.Pointer)(e) = nil
+                } else if t.Elem.Pointers() {
+                    memclrHasPointers(e, t.Elem.Size_)
+                } else {
+                    memclrNoHeapPointers(e, t.Elem.Size_)
+                }
+                b.tophash[i] = emptyOne
+                ...
+            }
+        }
+        ...
+    }
+    ```
+
+- 上述操作中，将当前位置设为空值，但是还可以根据哈希桶中其他位置的实际情况，进行优化，首先判断当前元素是否为哈希桶中最后一个
+  - 如果当前元素是当前桶中最后一个，后续溢出桶存在，且溢出桶中第一个元素的标记位不是 `emptyRest`，说明后面还有元素
+  - 如果当前元素不是桶中最后一个，且后一个元素的标记位不是 `emptyRest`，同样说明后面还有其他元素
+  - 除此以外，说明后面没有其他元素，即当前元素是最后一个
+
+    ```go
+    func mapdelete(t *maptype, h *hmap, key unsafe.Pointer) {
+        ...
+        search:
+        for ; b != nil; b = b.overflow(t) {
+            for i := uintptr(0); i < abi.MapBucketCount; i++ {
+                ...
+                // If the bucket now ends in a bunch of emptyOne states,
+                // change those to emptyRest states.
+                // It would be nice to make this a separate function, but
+                // for loops are not currently inlineable.
+                if i == abi.MapBucketCount-1 {
+                    if b.overflow(t) != nil && b.overflow(t).tophash[0] != emptyRest {
+                        goto notLast
+                    }
+                } else {
+                    if b.tophash[i+1] != emptyRest {
+                        goto notLast
+                    }
+                }
+                ...
+            }
+        }
+        ...
+    }
+    ```
+
+- 针对最后一个元素
+  - 将标记位重新设置为 `emptyRest`（表示当前以及后续均为空）
+  - 之后再前向遍历相邻位置，如果是空值，即 `emptyOne`，则同样更新为 `emptyRest`
+
+    ```go
+    func mapdelete(t *maptype, h *hmap, key unsafe.Pointer) {
+        ...
+        search:
+        for ; b != nil; b = b.overflow(t) {
+            for i := uintptr(0); i < abi.MapBucketCount; i++ {
+                ...
+                for {
+                    b.tophash[i] = emptyRest
+                    if i == 0 {
+                        if b == bOrig {
+                            break // beginning of initial bucket, we're done.
+                        }
+                        // Find previous bucket, continue at its last entry.
+                        c := b
+                        for b = bOrig; b.overflow(t) != c; b = b.overflow(t) {
+                        }
+                        i = abi.MapBucketCount - 1
+                    } else {
+                        i--
+                    }
+                    if b.tophash[i] != emptyOne {
+                        break
+                    }
+                }
+                ...
+            }
+        }
+        ...
+    }
+    ```
+
+- 最终处理
+  - 删除目标元素后，更新元素数量，如果当前 map 中元素数量为空，则重置 hash 种子
+  - 进行并发校验，并修改 map 的写标记位
+
+    ```go
+    func mapdelete(t *maptype, h *hmap, key unsafe.Pointer) {
+        ...
+        search:
+        for ; b != nil; b = b.overflow(t) {
+            for i := uintptr(0); i < abi.MapBucketCount; i++ {
+                ...
+            notLast:
+                h.count--
+                // Reset the hash seed to make it more difficult for attackers to
+                // repeatedly trigger hash collisions. See issue 25237.
+                if h.count == 0 {
+                    h.hash0 = uint32(rand())
+                }
+                break search
+            }
+        }
+
+        if h.flags&hashWriting == 0 {
+            fatal("concurrent map writes")
+        }
+        h.flags &^= hashWriting
+    }
+    ```
+
+### 清空
+
+对于将 map 进行清空，并没有提供额外的函数进行调用，只能通过如下两种方式实现：
+
+- 修改 map 变量的引用，原本的变量被 GC 回收
+- 循环调用 `delete` 函数
+
+在直观对比上，方法一更简洁，但是会存在一定的资源浪费，方法二遍历操作会有额外耗时，但是实际上编译器会对方法二做一定优化，最终调用 [mapclear](https://github.com/golang/go/blob/44f18706661db8b865719d15a5cfa0515d1a4fca/src/runtime/map.go#L1075C6-L1075C14) 函数进行处理，将 hashmap 相关的一系列标记位进行重置，例如：
+
+- 修改 count 值为 0
+- 修改所有位置的 tophash 值为 `emptyRest`
+- 重置溢出桶相关逻辑
+- 重置扩容相关逻辑
 
 ## 扩容
