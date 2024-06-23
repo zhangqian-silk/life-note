@@ -60,7 +60,7 @@ fmt.Println(a2) // "[0 0 3 4]"
 
 ### 访问
 
-数组中的元素可以通过下标进行访问，内置的 `len` 函数将返回数组中的元素个数，通过下标 `n` 访问数组 `a` 时，必须注意索引范围，即 `a[n]` 必须满足 $0 \leq n < len(array)$：
+数组中的元素可以通过下标进行访问，内置的 `len()` 函数将返回数组中的元素个数，通过下标 `n` 访问数组 `a` 时，必须注意索引范围，即 `a[n]` 必须满足 $0 \leq n < len(array)$：
 
 ```go
 a := [3]int{1, 2, 3}
@@ -119,7 +119,7 @@ type slice struct {
 }
 ```
 
-结构体中的另外两个字段，`len` 和 `cap`，分别代表当前切片中的元素数量以及当前切片的最大容量，可以通过内置的 `len` 函数和 `cap` 函数获取相关数据。如下所示：将数组 `a` 的子序列 `a[2:4]` 转为子序列
+结构体中的另外两个字段，`len` 和 `cap`，分别代表当前切片中的元素数量以及当前切片的最大容量，可以通过内置的 `len()` 函数和 `cap()` 函数获取相关数据。如下所示：将数组 `a` 的子序列 `a[2:4]` 转为子序列
 
 ```go
 s := make([]int, 3, 5)
@@ -182,11 +182,11 @@ a := [...]int{1, 2, 3}
 s := a[:]
 ```
 
-编译期详细处理方式可参考 [slicelit](https://github.com/golang/go/blob/722d59436bc5881914619d2b95c9d01a46036428/src/cmd/compile/internal/walk/complit.go#L288) 函数。
+编译期详细处理方式可参考 [slicelit()](https://github.com/golang/go/blob/722d59436bc5881914619d2b95c9d01a46036428/src/cmd/compile/internal/walk/complit.go#L288) 函数。
 
-#### `make` 函数初始化
+#### `make()` 函数初始化
 
-对于 `make` 函数同理，底层会构建一个符合容量条件的数组，再通过下标的方式创建切片，并指定切片的真实长度：
+对于 `make()` 函数同理，底层会构建一个符合容量条件的数组，再通过下标的方式创建切片，并指定切片的真实长度：
 
 ```go
 s := make([]int, 3, 5)
@@ -226,7 +226,7 @@ fmt.Println(emptySlice == nil)                // "false"
 fmt.Println(unsafe.SliceData(emptySlice))     // "0xcc32e0"
 ```
 
-在绝大部分情况下，我们只是关注切片内是否含有元素，并不需要严格对 `nil` 和空切片进行区分，使用 `len` 函数足够满足日常使用，也不需要使用 `s == nil` 刻意进行判断。但是在 JSON Encode 处理和 `reflect` 包中的 [DeepEqual](https://github.com/golang/go/blob/a61729b880f731bf89f40c5c0366cdeb61108753/src/reflect/deepequal.go#L229) 判断中，两者仍会因为是否被初始化而结果不同：
+在绝大部分情况下，我们只是关注切片内是否含有元素，并不需要严格对 `nil` 和空切片进行区分，使用 `len()` 函数足够满足日常使用，也不需要使用 `s == nil` 刻意进行判断。但是在 JSON Encode 处理和 `reflect` 包中的 [DeepEqual()](https://github.com/golang/go/blob/a61729b880f731bf89f40c5c0366cdeb61108753/src/reflect/deepequal.go#L229) 判断中，两者仍会因为是否被初始化而结果不同：
 
 ```go
 var nilSlice []string
@@ -249,7 +249,7 @@ fmt.Println(reflect.DeepEqual(nilSlice, emptySlice)) // "false"
 
 ### 添加元素
 
-通过 [append](https://github.com/golang/go/blob/1667dbd7be0da5e75a25f14c339c859ed2190b43/src/builtin/builtin.go#L149) 函数，可以向切片内新增新的元素。`append` 函数内部逻辑也比较符合直觉，综合判断当前切片的元素数量 `len` 与最大容量 `cap`，如果仍有足够的容量，则修改底层数组中的值，并重新进行切片。如果容量不够，则触发扩容逻辑，构造一个足够大的新的数组，来容纳原有元素以及新添加的元素。
+通过 [append()](https://github.com/golang/go/blob/1667dbd7be0da5e75a25f14c339c859ed2190b43/src/builtin/builtin.go#L149) 函数，可以向切片内新增新的元素。`append()` 函数内部逻辑也比较符合直觉，综合判断当前切片的元素数量 `len` 与最大容量 `cap`，如果仍有足够的容量，则修改底层数组中的值，并重新进行切片。如果容量不够，则触发扩容逻辑，构造一个足够大的新的数组，来容纳原有元素以及新添加的元素。
 
 ```go
 // The append built-in function appends elements to the end of a slice. If
@@ -267,17 +267,17 @@ fmt.Println(reflect.DeepEqual(nilSlice, emptySlice)) // "false"
 func append(slice []Type, elems ...Type) []Type
 ```
 
-值得注意的是，`append` 是否触发了扩容操作，用户是不感知的，不能确认扩容后的切片与原切片是否一致，同样，也无法确认修改新的切片，是否会对老的切片产生影响。因此通常的做法是将 `append` 的返回值直接赋值给原本的切片变量，直接丢弃旧的切片。
+值得注意的是，`append()` 是否触发了扩容操作，用户是不感知的，不能确认扩容后的切片与原切片是否一致，同样，也无法确认修改新的切片，是否会对老的切片产生影响。因此通常的做法是将 `append()` 的返回值直接赋值给原本的切片变量，直接丢弃旧的切片。
 
 ### 扩容
 
-当切片容量不足，需要进行扩容时，最终会调用 [growslice](https://github.com/golang/go/blob/1667dbd7be0da5e75a25f14c339c859ed2190b43/src/runtime/slice.go#L155) 函数来执行扩容操作，为切片分配一个新创建的、足以容纳所要新增所有元素的数组，并在此基础上做一些内存对齐的优化处理，然后将原本的元素以及要新增的元素添加至数组中，最终得到一个符合要求的新切片。
+当切片容量不足，需要进行扩容时，最终会调用 [growslice()](https://github.com/golang/go/blob/1667dbd7be0da5e75a25f14c339c859ed2190b43/src/runtime/slice.go#L155) 函数来执行扩容操作，为切片分配一个新创建的、足以容纳所要新增所有元素的数组，并在此基础上做一些内存对齐的优化处理，然后将原本的元素以及要新增的元素添加至数组中，最终得到一个符合要求的新切片。
 
 #### 容量计算
 
 对于切片新的容量，从内存成本开销最小来说，肯定需要多少，就分配多少。但是这种情况下，下次新增元素就必然还会触发扩容操作，故需要综合考虑当前所需长度大小以及未来可能新增元素数量来设计容量增长模型，计算出较为合适的容量。
 
-在 `go1.18` 以及之后得到版本中，容量计算函数 [nextslicecap](https://github.com/golang/go/blob/1667dbd7be0da5e75a25f14c339c859ed2190b43/src/runtime/slice.go#L267) 逻辑如下所示：
+在 `go1.18` 以及之后得到版本中，容量计算函数 [nextslicecap()](https://github.com/golang/go/blob/1667dbd7be0da5e75a25f14c339c859ed2190b43/src/runtime/slice.go#L267) 逻辑如下所示：
 
 - 如果所需长度超过当前容量两倍，必然超过容量增长模型的最大值，直接返回所需长度
 - 如果当前容量小于阈值 256，返回当前容量的两倍
@@ -364,7 +364,7 @@ func growslice(et *_type, old slice, cap int) slice {
 
 #### 内存对齐
 
-CPU 从内存中读取数据时，每次都会按照固定大小读取，每次读取 2 字节、4字节、8 字节，等等。在 Golang 中，默认是按照 8 字节来进行对齐。例如，如果一个元素占用了 9 字节，那么在内存分配时，会向上取值，直接分配 16 字节来进行内存对齐。[roundupsize](https://github.com/golang/go/blob/1667dbd7be0da5e75a25f14c339c859ed2190b43/src/runtime/msize.go#L14) 函数逻辑如下所示：
+CPU 从内存中读取数据时，每次都会按照固定大小读取，每次读取 2 字节、4字节、8 字节，等等。在 Golang 中，默认是按照 8 字节来进行对齐。例如，如果一个元素占用了 9 字节，那么在内存分配时，会向上取值，直接分配 16 字节来进行内存对齐。[roundupsize()](https://github.com/golang/go/blob/1667dbd7be0da5e75a25f14c339c859ed2190b43/src/runtime/msize.go#L14) 函数逻辑如下所示：
 
 - 对于小对象，最终按照预先定义的内存表([sizeclasses.go](https://github.com/golang/go/blob/1667dbd7be0da5e75a25f14c339c859ed2190b43/src/runtime/sizeclasses.go))返回对齐后的数据
 - 对于大对象，则按照页面大小向上对齐
@@ -479,11 +479,11 @@ func growslice(oldPtr unsafe.Pointer, newLen, oldCap, num int, et *_type) slice 
 }
 ```
 
-在上述所有流程执行完毕后，会返回一个扩容后的、包含了旧切片所有元素的新的切片，原 `append` 函数正常执行赋值逻辑即可。
+在上述所有流程执行完毕后，会返回一个扩容后的、包含了旧切片所有元素的新的切片，原 `append()` 函数正常执行赋值逻辑即可。
 
 ### 拷贝
 
-在使用内置函数进行切片拷贝时，会调用到 [skucecopy](https://github.com/golang/go/blob/1667dbd7be0da5e75a25f14c339c859ed2190b43/src/runtime/slice.go#L325) 函数进行处理，函数内部对切片长度做了安全判断，将一个长度较大的切片，拷贝至长度较小的切片时，最终进行拷贝时，会以较小的值为基准进行操作，即使小切片的容量足够大，也仅会按照实际元素含量进行处理，自然也不会触发扩容相关操作。
+在使用内置函数进行切片拷贝时，会调用到 [skucecopy()](https://github.com/golang/go/blob/1667dbd7be0da5e75a25f14c339c859ed2190b43/src/runtime/slice.go#L325) 函数进行处理，函数内部对切片长度做了安全判断，将一个长度较大的切片，拷贝至长度较小的切片时，最终进行拷贝时，会以较小的值为基准进行操作，即使小切片的容量足够大，也仅会按照实际元素含量进行处理，自然也不会触发扩容相关操作。
 
 ```go
 // slicecopy is used to copy from a string or slice of pointerless elements into a slice.
