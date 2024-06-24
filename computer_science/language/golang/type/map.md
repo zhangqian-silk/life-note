@@ -80,7 +80,6 @@ const (
     evacuatedY     = 3 // same as above, but evacuated to second half of larger table.
     evacuatedEmpty = 4 // cell is empty, bucket is evacuated.
     minTopHash     = 5 // minimum tophash for a normal filled cell.
-
 )
 ```
 
@@ -432,7 +431,7 @@ fmt.Println(m) // "map[key_1:100 key_2:2]"
 
 - 确认哈希桶，声明或初始化一些关键变量
   - 桶号由哈希值的低 B 位来确认，`hash & (1<<B-1)` 最终的结果，等价于 `hash % 2^B`
-  - 确认当前哈希表的扩容状态，优先确保扩容完成（后文详细介绍）
+  - 确认当前哈希表的扩容状态，如果正在进行扩容，则触发一次扩容操作，等待当前 hash 桶数据迁移完成（后文详细介绍）
   - 通过桶号获取桶的地址
   - 计算高位的哈希值，并即确保哈希值的最小值，兼容标记位逻辑
   - 声明 key 值索引的指针 `inserti`
@@ -1156,19 +1155,399 @@ func (h *hmap) growing() bool {
 }
 ```
 
-对于 `growWork()` 函数，每次会触发两次数据迁移操作，一次是迁移正在使用的桶，一次是按迁移进度，迁移下一个桶
+对于 `growWork()` 函数，每次会触发两次数据迁移操作：
+
+- 一次是迁移正在使用的桶，因为 B 值对于新桶、旧桶可能发生改变（区分增量扩容和等量扩容），所以需要计算下旧桶对应的桶号（即 `bucket&h.oldbucketmask()`）
+- 一次是按迁移进度，迁移下一个桶（即 `h.nevacuate`）
+
+    ```go
+    func growWork(t *maptype, h *hmap, bucket uintptr) {
+        // make sure we evacuate the oldbucket corresponding
+        // to the bucket we're about to use
+        evacuate(t, h, bucket&h.oldbucketmask())
+
+        // evacuate one more oldbucket to make progress on growing
+        if h.growing() {
+            evacuate(t, h, h.nevacuate)
+        }
+    }
+    ```
+
+### [evacuate()](https://github.com/golang/go/blob/e8ee1dc4f9e2632ba1018610d1a1187743ae397f/src/runtime/map.go#L1250)
+
+在数据迁移时，重点是区分迁移前后，哈希桶中元素的重新分配：
+
+- 对于等量扩容来说，仅仅是将原本较为稀疏的数据，调整的更为紧凑，比如将溢出桶的数据放在普通桶中，桶号没有发生改变
+- 对于增量扩容来说，因为 B 值扩大了，低位 hash 的位数也扩充了一位，根据这一位的取值是 0 或者 1，将老数据分为了两部分，高位为 0 时，桶号不变，也被称作 X 区，高位为 1 时，桶号改变，也被称作 Y 区
+
+函数的细节介绍如下：
+
+- 参数预处理：
+  - 根据桶号 `oldbucket` 定位桶的地址
+  - 计算扩容前的桶数（如果不是等量扩容，B 值要减一计算）
+  - 判断当前桶是否完成数据迁移
+
+    ```go
+    func evacuate(t *maptype, h *hmap, oldbucket uintptr) {
+        ...
+        b := (*bmap)(add(h.oldbuckets, oldbucket*uintptr(t.BucketSize)))
+        newbit := h.noldbuckets()
+        if !evacuated(b) {
+            ...
+        }
+        ...
+    }
+    ```
+
+  - 对于桶的数量，如果不是等量扩容，则 B 值要减一判断
+
+    ```go
+    func (h *hmap) noldbuckets() uintptr {
+        oldB := h.B
+        if !h.sameSizeGrow() {
+            oldB--
+        }
+        return bucketShift(oldB)
+    }
+    ```
+
+  - 数据迁移状态，通过桶中首位元素的 tophash 进行判断
+
+    ```go
+    func evacuated(b *bmap) bool {
+        h := b.tophash[0]
+        return h > emptyOne && h < minTopHash
+    }
+
+    const (
+        emptyOne       = 1 // this cell is empty
+        evacuatedX     = 2 // key/elem is valid.  Entry has been evacuated to first half of larger table.
+        evacuatedY     = 3 // same as above, but evacuated to second half of larger table.
+        evacuatedEmpty = 4 // cell is empty, bucket is evacuated.
+        minTopHash     = 5 // minimum tophash for a normal filled cell.
+    )
+    ```
+
+- 迁移结构初始化
+  - 迁移时所用数据结构为 `evacDst`，存储每个位置相关数据
+  - 初始化 xy 容器，用于存储 x 区和 y 区数据
+
+    ```go
+    // evacDst is an evacuation destination.
+    type evacDst struct {
+        b *bmap          // current destination bucket
+        i int            // key/elem index into b
+        k unsafe.Pointer // pointer to current key storage
+        e unsafe.Pointer // pointer to current elem storage
+    }
+
+    func evacuate(t *maptype, h *hmap, oldbucket uintptr) {
+        ...
+        if !evacuated(b) {
+            ...
+            // xy contains the x and y (low and high) evacuation destinations.
+            var xy [2]evacDst
+            ...
+        }
+        ...
+    }
+    ```
+
+  - 初始化 x 区数据空间
+
+    ```go
+    func evacuate(t *maptype, h *hmap, oldbucket uintptr) {
+        ...
+        if !evacuated(b) {
+            ...
+            x := &xy[0]
+            x.b = (*bmap)(add(h.buckets, oldbucket*uintptr(t.BucketSize)))
+            x.k = add(unsafe.Pointer(x.b), dataOffset)
+            x.e = add(x.k, abi.MapBucketCount*uintptr(t.KeySize))
+            ...
+        }
+        ...
+    }
+    ```
+
+  - 对于增量扩容，额外初始化 y 区数据空间，其中桶的地址是通过旧桶的索引(`oldbucket`)和旧桶的数量(`newbit`)计算而来
+
+    ```go
+    func evacuate(t *maptype, h *hmap, oldbucket uintptr) {
+        ...
+        if !evacuated(b) {
+            ...
+            if !h.sameSizeGrow() {
+                // Only calculate y pointers if we're growing bigger.
+                // Otherwise GC can see bad pointers.
+                y := &xy[1]
+                y.b = (*bmap)(add(h.buckets, (oldbucket+newbit)*uintptr(t.BucketSize)))
+                y.k = add(unsafe.Pointer(y.b), dataOffset)
+                y.e = add(y.k, abi.MapBucketCount*uintptr(t.KeySize))
+            }
+            ...
+        }
+        ...
+    }
+    ```
+
+- 外层循环初始化
+  - 外层循环处理哈希桶和所有溢出桶，初始化 key 与 value 指针
+
+    ```go
+    func evacuate(t *maptype, h *hmap, oldbucket uintptr) {
+        ...
+        if !evacuated(b) {
+            ...
+            for ; b != nil; b = b.overflow(t) {
+                k := add(unsafe.Pointer(b), dataOffset)
+                e := add(k, abi.MapBucketCount*uintptr(t.KeySize))
+                ...
+            }
+            ...
+        }
+        ...
+    }
+    ```
+
+- 内层循环初始化
+  - 内循环处理每个桶内的数据
+  - 处理空值，设置为 `evacuatedEmpty`，并继续循环
+  - 重复进行数据迁移时，触发异常
+  - 获取 key 的真实值（即 `k2`）
+
+    ```go
+    func evacuate(t *maptype, h *hmap, oldbucket uintptr) {
+        ...
+        if !evacuated(b) {
+            ...
+            for ; b != nil; b = b.overflow(t) {
+                ...
+                for i := 0; i < abi.MapBucketCount; i, k, e = i+1, add(k, uintptr(t.KeySize)), add(e, uintptr(t.ValueSize)) {
+                    top := b.tophash[i]
+                    if isEmpty(top) {
+                        b.tophash[i] = evacuatedEmpty
+                        continue
+                    }
+                    if top < minTopHash {
+                        throw("bad map state")
+                    }
+                    k2 := k
+                    if t.IndirectKey() {
+                        k2 = *((*unsafe.Pointer)(k2))
+                    }
+                }
+            }
+            ...
+        }
+        ...
+    }
+    ```
+
+- 对于增量扩容，计算迁移区域
+  - 如果当前有迭代器正在使用，且 key 值本身和 hash 值不稳定，例如浮点数 NaN，此时因为 hash 值本身作用不大，故直接通过 tophash 值的最低位决定迁移至 x 区还是 y 区
+    - 此外，对于这种场景还需要重新更新 tophash 值（与之前不同），引入额外的随机数，保障多次扩容后，这些特殊的 key 值可以均匀分布
+  - 对于正常的 key 值（hash 结果固定）来说，根据 hash 值的第 `newbit` 位，决定迁移至 x 区还是 y 区
+    - 增量扩容时，B 每次增加一位，容量扩充为原本的 2 倍，故 `newbit` 既可以表示原本的桶的数量，也可以表示桶号新增的那一位
+    - 假定扩容前 B 是 4，共有 16 个桶，即 `0b10000` 个桶，扩容后 B 是 5，此时要获取到低位 hash 新增的那一位数据，直接与 `0b10000` 做与运算即可
+
+    ```go
+    func evacuate(t *maptype, h *hmap, oldbucket uintptr) {
+        ...
+        if !evacuated(b) {
+            ...
+            for ; b != nil; b = b.overflow(t) {
+                ...
+                for i := 0; i < abi.MapBucketCount; i, k, e = i+1, add(k, uintptr(t.KeySize)), add(e, uintptr(t.ValueSize)) {
+                    ...
+                    var useY uint8
+                    if !h.sameSizeGrow() {
+                        hash := t.Hasher(k2, uintptr(h.hash0))
+                        if h.flags&iterator != 0 && !t.ReflexiveKey() && !t.Key.Equal(k2, k2) {
+                            useY = top & 1
+                            top = tophash(hash)
+                        } else {
+                            if hash&newbit != 0 {
+                                useY = 1
+                            }
+                        }
+                    }
+                    ...
+                }
+            }
+            ...
+        }
+        ...
+    }
+    ```
+
+- 获取迁移的目标位置
+  - 计算 `evacuatedX` 与 `evacuatedY` 的数量关系，保障 $evacuatedX + 1 = evacuatedY$
+  - 更新旧桶中当前位置的 `tophash` 值，记录元素被迁移至 x 区还是 y 区
+  - 通过 `useY` 获取要迁移的目标位置
+  - 判断目标位置索引，如果溢出，则使用溢出桶
+
+    ```go
+    func evacuate(t *maptype, h *hmap, oldbucket uintptr) {
+        ...
+        if !evacuated(b) {
+            ...
+            for ; b != nil; b = b.overflow(t) {
+                ...
+                for i := 0; i < abi.MapBucketCount; i, k, e = i+1, add(k, uintptr(t.KeySize)), add(e, uintptr(t.ValueSize)) {
+                    ...
+                    if evacuatedX+1 != evacuatedY || evacuatedX^1 != evacuatedY {
+                        throw("bad evacuatedN")
+                    }
+
+                    b.tophash[i] = evacuatedX + useY // evacuatedX + 1 == evacuatedY
+                    dst := &xy[useY]                 // evacuation destination
+                    
+                    if dst.i == abi.MapBucketCount {
+                        dst.b = h.newoverflow(t, dst.b)
+                        dst.i = 0
+                        dst.k = add(unsafe.Pointer(dst.b), dataOffset)
+                        dst.e = add(dst.k, abi.MapBucketCount*uintptr(t.KeySize))
+                    }
+                    ...
+                }
+            }
+            ...
+        }
+        ...
+    }
+    ```
+
+- 迁移数据
+  - 修改 tophash
+    - `dst.i&(abi.MapBucketCount-1)` 防止越界
+  - 迁移 key 和 value
+
+    ```go
+    func evacuate(t *maptype, h *hmap, oldbucket uintptr) {
+        ...
+        if !evacuated(b) {
+            ...
+            for ; b != nil; b = b.overflow(t) {
+                ...
+                for i := 0; i < abi.MapBucketCount; i, k, e = i+1, add(k, uintptr(t.KeySize)), add(e, uintptr(t.ValueSize)) {
+                    ...
+                    dst.b.tophash[dst.i&(abi.MapBucketCount-1)] = top // mask dst.i as an optimization, to avoid a bounds check
+                    if t.IndirectKey() {
+                        *(*unsafe.Pointer)(dst.k) = k2 // copy pointer
+                    } else {
+                        typedmemmove(t.Key, dst.k, k) // copy elem
+                    }
+                    if t.IndirectElem() {
+                        *(*unsafe.Pointer)(dst.e) = *(*unsafe.Pointer)(e)
+                    } else {
+                        typedmemmove(t.Elem, dst.e, e)
+                    }
+                    ...
+                }
+            }
+            ...
+        }
+        ...
+    }
+    ```
+
+- 更新目标位置
+  - 更新索引，指向下一个位置
+  - 更新 key 和 value 指针，同样指向下一个位置
+    - 更新操作有可能导致越界，会在迁移数据时，通过索引进行判断，越界时会更新为溢出桶的地址
+
+    ```go
+    func evacuate(t *maptype, h *hmap, oldbucket uintptr) {
+        ...
+        if !evacuated(b) {
+            ...
+            for ; b != nil; b = b.overflow(t) {
+                ...
+                for i := 0; i < abi.MapBucketCount; i, k, e = i+1, add(k, uintptr(t.KeySize)), add(e, uintptr(t.ValueSize)) {
+                    ...
+                    dst.i++
+                    // These updates might push these pointers past the end of the
+                    // key or elem arrays.  That's ok, as we have the overflow pointer
+                    // at the end of the bucket to protect against pointing past the
+                    // end of the bucket.
+                    dst.k = add(dst.k, uintptr(t.KeySize))
+                    dst.e = add(dst.e, uintptr(t.ValueSize))
+                }
+            }
+            ...
+        }
+        ...
+    }
+    ```
+
+- 迁移完成，最终处理
+  - 如果旧桶没有被迭代器使用，且桶中包含指针，则清理 key 和 value 的内存空间
+    - 注意不能清理 tophash 部分，标记位还有作用（`dataOffset` 表示 tophash 部分的偏移量）
+  - 如果当前迁移为顺序迁移，则更新迁移进度
 
 ```go
-func growWork(t *maptype, h *hmap, bucket uintptr) {
-    // make sure we evacuate the oldbucket corresponding
-    // to the bucket we're about to use
-    evacuate(t, h, bucket&h.oldbucketmask())
+func evacuate(t *maptype, h *hmap, oldbucket uintptr) {
+    ...
+    if !evacuated(b) {
+        ...
+        // Unlink the overflow buckets & clear key/elem to help GC.
+        if h.flags&oldIterator == 0 && t.Bucket.Pointers() {
+            b := add(h.oldbuckets, oldbucket*uintptr(t.BucketSize))
+            // Preserve b.tophash because the evacuation
+            // state is maintained there.
+            ptr := add(b, dataOffset)
+            n := uintptr(t.BucketSize) - dataOffset
+            memclrHasPointers(ptr, n)
+        }
+    }
 
-    // evacuate one more oldbucket to make progress on growing
-    if h.growing() {
-        evacuate(t, h, h.nevacuate)
+    if oldbucket == h.nevacuate {
+        advanceEvacuationMark(h, t, newbit)
     }
 }
 ```
 
-### [evacuate()](https://github.com/golang/go/blob/e8ee1dc4f9e2632ba1018610d1a1187743ae397f/src/runtime/map.go#L1250)
+### [advanceEvacuationMark()](https://github.com/golang/go/blob/e8ee1dc4f9e2632ba1018610d1a1187743ae397f/src/runtime/map.go#L1364)
+
+hashmap 在扩容时，新的内存空间以及相关标识位都会完成初始化操作，但是数据的迁移是渐进式的操作，用于优化单次操作的性能，在每一次数据按顺序迁移完，会通过 `advanceEvacuationMark()` 函数来处理迁移进度相关的逻辑。
+
+函数的逻辑如下所示：
+
+- 迁移进度自增
+- 循环判断后续位置是否完成迁移
+  - 设置循环结束标记位
+    - 桶数量较少时，以桶数量为准
+    - 桶数量较多时，最多循环 1024 次
+  - 循环判断当前桶是否完成数据迁移
+    - 数据迁移每次会触发两次，一次是在使用的桶，一次是顺序迁移，所以有可能当前位置之后的桶已经完成了迁移
+- 如果迁移完成，则移除相关数据
+  - 清理旧桶
+  - 清理旧溢出桶的相关数据
+  - 移除扩容标记位
+
+```go
+func advanceEvacuationMark(h *hmap, t *maptype, newbit uintptr) {
+    h.nevacuate++
+    // Experiments suggest that 1024 is overkill by at least an order of magnitude.
+    // Put it in there as a safeguard anyway, to ensure O(1) behavior.
+    stop := h.nevacuate + 1024
+    if stop > newbit {
+        stop = newbit
+    }
+    for h.nevacuate != stop && bucketEvacuated(t, h, h.nevacuate) {
+        h.nevacuate++
+    }
+    if h.nevacuate == newbit { // newbit == # of oldbuckets
+        // Growing is all done. Free old main bucket array.
+        h.oldbuckets = nil
+        // Can discard old overflow buckets as well.
+        // If they are still referenced by an iterator,
+        // then the iterator holds a pointers to the slice.
+        if h.extra != nil {
+            h.extra.oldoverflow = nil
+        }
+        h.flags &^= sameSizeGrow
+    }
+}
+```
