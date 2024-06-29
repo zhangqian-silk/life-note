@@ -409,3 +409,7 @@ func BytesToString(b []byte) string{
     return *(*string)(unsafe.Pointer(&sh))
 }
 ```
+
+## 参考
+
+- <https://draveness.me/golang/docs/part2-foundation/ch03-datastructure/golang-string/>
