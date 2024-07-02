@@ -1,4 +1,4 @@
-# GMP
+# GMP 调度模型
 
 ## 进程 & 线程 & 协程
 
@@ -61,7 +61,19 @@ int function(void) {
 }
 ```
 
-## Goroutine
+## 调度器
+
+Golang 最初版本实现的调度器由 GM 模型组成（协程+线程），并在不同版本支持了单线程调度、多线程调度，后续引入了处理器 P，构成了目前的 GMP 模型，并逐渐迭代，支持了工作窃取、基于协作的抢占式调度和基于信号的抢占式调度等能力。
+
+### G & M & P
+
+- G：Goroutine，有栈协程，也可看作是用户态线程，拥有自己的上下文空间，较为轻量（一般在 KB 级别），每个 G 可以看作是一个较为独立的任务
+- M：Machine，具体执行任务的机器，是对于内核线程的封装，是 CPU 调度的基本单位，M 的数量一般略大于或等于 CPU 核心数，以便于当某个 M 被阻塞时，P 可以切换至另外一个空闲的 M
+- P：Processor，实现调度逻辑的处理器，负责将 G 调度至 M 来执行，P 的数量一般与 CPU 核心数一致。P 内部维护了一个本地 G 队列，队列内相当于单线程多任务，减小锁的开销，同时系统内还维护了一个全局队列，用于全局的调度，提高整体性能
+
+整体模型如下图所示：
+  
+  ![GMP模型](images/2024-07-03-00-05-16.png)
 
 ## 参考
 
@@ -70,3 +82,6 @@ int function(void) {
 - <https://naoffer.com/article/detail/2837>
 - <https://mthli.xyz/stackful-stackless/>
 - <https://www.chiark.greenend.org.uk/~sgtatham/coroutines.html>
+- <https://draveness.me/golang/docs/part3-runtime/ch06-concurrency/golang-goroutine/>
+- <https://learnku.com/articles/41728>
+- <https://haobin.work/2023/06/05/go/%E4%BB%8E%E8%BF%9B%E7%A8%8B%E5%BC%80%E5%A7%8B%E4%BA%86%E8%A7%A3GMP%E6%A8%A1%E5%9E%8B/>
