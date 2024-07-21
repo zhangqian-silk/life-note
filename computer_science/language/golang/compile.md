@@ -81,7 +81,7 @@ func enqueueFunc(fn *ir.Func) {
 }
 ```
 
-在 [compileFunctions()](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/gc/compile.go#L121) 函数中，通过 [ssagen.Compile()](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/ssagen/pgen.go#L301) 方法，编译所有函数，将其转化为 SSA 形式的中间代码。
+在 [compileFunctions()](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/gc/compile.go#L121) 函数中，会编译所有函数，将其转化为 SSA 形式的中间代码。
 
 ```go
 func Main(archInit func(*ssagen.ArchInfo)) {
@@ -99,29 +99,6 @@ func Main(archInit func(*ssagen.ArchInfo)) {
         ...
         break
     }
-    ...
-}
-
-// compileFunctions compiles all functions in compilequeue.
-func compileFunctions(profile *pgoir.Profile) {
-    ...
-    var wg sync.WaitGroup
-    var compile func([]*ir.Func)
-    compile = func(fns []*ir.Func) {
-        wg.Add(len(fns))
-        for _, fn := range fns {
-            fn := fn
-            queue(func(worker int) {
-                ssagen.Compile(fn, worker, profile)
-                compile(fn.Closures)
-                wg.Done()
-            })
-        }
-    }
-
-    compile(compilequeue)
-    compilequeue = nil
-    wg.Wait()
     ...
 }
 ```
@@ -592,7 +569,7 @@ FuncDecl struct {
 
 ## 节点替换
 
-在将待编译函数添加至队列中时，会先执行 [enqueueFunc()](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/gc/compile.go#L31) 函数，对要编译的目标函数做一些处理，例如替换函数的具体实现，并将目标函数添加至队列中。
+在将待编译函数添加至队列中时，会先执行 [enqueueFunc()](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/gc/compile.go#L31) 函数，对要编译的目标函数做一些处理，并将目标函数添加至队列中。
 
 ```go
 func enqueueFunc(fn *ir.Func) {
@@ -612,45 +589,275 @@ func enqueueFunc(fn *ir.Func) {
 }
 ```
 
-## 生成 SSA
+在 [prepareFunc()](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/gc/compile.go#L96) 函数中，会调用 [walk.Walk](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/walk/walk.go#L24) 函数，将 AST 中的部分关键字和内建函数替换为真正的运行时函数。
 
-- [buildssa()](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/ssagen/ssa.go#L294)：负责从 AST 构建 SSA （中间代码），会首先调用 `stmtList()` 方法，对传入的所有节点分别调用 `stmt()` 方法，将 AST 节点转化为 SSA 形式的中间代码，然后再调用 `compile()` 方法，进行优化。
+```go
+func prepareFunc(fn *ir.Func) {
+    ...
+    walk.Walk(fn)
+    ...
+}
 
-    ```go
-    func buildssa(fn *ir.Func, worker int, isPgoHot bool) *ssa.Func {
-        ...
-        // 将 AST 节点转化为中间代码
-        s.stmtList(fn.Body)
-        ...
-        // 优化中间代码
-        ssa.Compile(s.f)
-        ...
+func Walk(fn *ir.Func) {
+    ...
+    walkStmtList(ir.CurFunc.Body)
+    ...
+}
+```
+
+在 [walkStmtList()](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/walk/stmt.go#L174C6-L174C18) 会对传入的节点进行遍历处理，最终通过 [walkStmt()](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/walk/stmt.go#L15) 函数内部，针对具体语句，分别执行替换逻辑。
+
+```go
+func walkStmtList(s []ir.Node) {
+    for i := range s {
+        s[i] = walkStmt(s[i])
     }
-    ```
+}
+```
 
-- [stmt()](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/ssagen/ssa.go#L1447)：负责根据节点操作符的不同，将 AST 节点转化为 SSA 形式的中间代码，例如常见的 `go`、`if`、`return`、`for` 等等。
+例如对于 `OPANIC` 等语句，会额外调用 [walkExpr()](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/walk/expr.go#L29) 进行处理，将 `panic` 关键字，转化为调用 `gopanic()` 函数：
 
-    ```go
-    func (s *state) stmt(n ir.Node) {
+```go
+func walkStmt(n ir.Node) ir.Node {
+    ...
+    switch n.Op() {
+    case ir.OPANIC:
         ...
-        switch n.Op() {
-        case ir.OGO:
-            n := n.(*ir.GoDeferStmt)
-            ...
-        case ir.OIF:
-            n := n.(*ir.IfStmt)
-            ...
-        case ir.ORETURN:
-            n := n.(*ir.ReturnStmt)
-            ...
-        case ir.OFOR:
-            // OFOR: for Ninit; Left; Right { Nbody }
-            // cond (Left); body (Nbody); incr (Right)
-            n := n.(*ir.ForStmt)
-            ...
+        n = walkExpr(n, &init)
         ...
-        default:
-            s.Fatalf("unhandled stmt %v", n.Op())
+    ...
+    }
+    ...
+}
+
+func walkExpr(n ir.Node, init *ir.Nodes) ir.Node {
+    ...
+    n = walkExpr1(n, init)
+    ...
+    return n
+}
+
+func walkExpr1(n ir.Node, init *ir.Nodes) ir.Node {
+    switch n.Op() {
+    case ir.OPANIC:
+        n := n.(*ir.UnaryExpr)
+        return mkcall("gopanic", nil, init, n.X)
+    ...
+    }
+}
+```
+
+对于部分语句，例如 `OBREAK` 和 `OGOTO` 等，不做特殊处理：
+
+```go
+func walkStmt(n ir.Node) ir.Node {
+    ...
+    switch n.Op() {
+    case ir.OBREAK,
+        ...
+        ir.OGOTO:
+        return n
+    ...
+    }
+    ...
+}
+```
+
+对于部分语句，例如 `ORANGE`，直接在 `walkStmt()` 函数中，调用具体的处理逻辑，即 [walkRange()](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/walk/range.go#L40)，函数内部将 `ORANGE` 语句转化为 `FORStme` 语句，并根据具体元素，数组、切片、哈希表等，添加不同的处理逻辑。
+
+```go
+func walkStmt(n ir.Node) ir.Node {
+    ...
+    switch n.Op() {
+    case ir.ORANGE:
+        n := n.(*ir.RangeStmt)
+        return walkRange(n)
+    ...
+    }
+    ...
+}
+
+func walkRange(nrange *ir.RangeStmt) ir.Node {
+    ...
+    nfor := ir.NewForStmt(nrange.Pos(), nil, nil, nil, nil, nrange.DistinctVars)
+    ...
+    switch k := t.Kind(); {
+    case k == types.TARRAY, k == types.TSLICE, k == types.TPTR: // TPTR is pointer-to-array
+        ...
+    case k == types.TMAP:
+        ...
+    ...
+    }
+    ...
+    var n ir.Node = nfor
+    ...
+    return n
+}
+```
+
+## 生成中间代码
+
+经过 `walk` 系列函数处理之后，会得到最终的抽象语法树，`range`、`panic` 等类似语法糖的语句，也会被转化为真正的实现语句，此时会在 [compileFunctions()](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/gc/compile.go#L121) 函数中会通过 [ssagen.Compile()](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/ssagen/pgen.go#L301) 函数，执行具体编译逻辑，并最终生成中间代码。
+
+```go
+// compileFunctions compiles all functions in compilequeue.
+func compileFunctions(profile *pgoir.Profile) {
+    ...
+    var wg sync.WaitGroup
+    var compile func([]*ir.Func)
+    compile = func(fns []*ir.Func) {
+        wg.Add(len(fns))
+        for _, fn := range fns {
+            fn := fn
+            queue(func(worker int) {
+                ssagen.Compile(fn, worker, profile)
+                compile(fn.Closures)
+                wg.Done()
+            })
         }
     }
-    ```
+
+    compile(compilequeue)
+    compilequeue = nil
+    wg.Wait()
+    ...
+}
+```
+
+[ssagen.Compile()](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/ssagen/pgen.go#L301) 函数内部会调用 [buildssa()](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/ssagen/ssa.go#L294) 函数，执行具体的编译操作，函数内部会首先调用 [stmtList()](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/ssagen/ssa.go#L1440) 函数，将所有 AST 节点转化为 SSA 形式的中间代码，然后再调用 [compile()](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/ssa/compile.go#L30) 函数，进行优化。
+
+```go
+// Compile builds an SSA backend function,
+// uses it to generate a plist,
+// and flushes that plist to machine code.
+// worker indicates which of the backend workers is doing the processing.
+func Compile(fn *ir.Func, worker int, profile *pgoir.Profile) {
+    f := buildssa(fn, worker, inline.IsPgoHotFunc(fn, profile) || inline.HasPgoHotInline(fn))
+    ...
+}
+
+func buildssa(fn *ir.Func, worker int, isPgoHot bool) *ssa.Func {
+    ...
+    // 将 AST 节点转化为中间代码
+    s.stmtList(fn.Body)
+    ...
+    // 优化中间代码
+    ssa.Compile(s.f)
+    ...
+}
+
+// stmtList converts the statement list n to SSA and adds it to s.
+func (s *state) stmtList(l ir.Nodes) {
+    for _, n := range l {
+        s.stmt(n)
+    }
+}
+```
+
+[stmt()](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/ssagen/ssa.go#L1447) 函数负责根据节点操作符的不同，将 AST 节点转化为 SSA 形式的中间代码，例如常见的 `go`、`if`、`return`、`for` 等等。
+
+```go
+func (s *state) stmt(n ir.Node) {
+    ...
+    switch n.Op() {
+    case ir.OGO:
+        n := n.(*ir.GoDeferStmt)
+        ...
+    case ir.OIF:
+        n := n.(*ir.IfStmt)
+        ...
+    case ir.ORETURN:
+        n := n.(*ir.ReturnStmt)
+        ...
+    case ir.OFOR:
+        // OFOR: for Ninit; Left; Right { Nbody }
+        // cond (Left); body (Nbody); incr (Right)
+        n := n.(*ir.ForStmt)
+        ...
+    ...
+    default:
+        s.Fatalf("unhandled stmt %v", n.Op())
+    }
+}
+```
+
+[compile()](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/ssa/compile.go#L30) 函数内部，会调用多种处理函数进行优化处理，即 [passes](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/ssa/compile.go#L457C1-L511C1)，处理函数内部也会根据架构不同，执行相对应的策略，函数会构建出最终的 SSA 形式的中间代码。
+
+```go
+func Compile(f *Func) {
+    ...
+    for _, p := range passes {
+        ...
+        p.fn(f)
+        ...
+    }
+    ...
+}
+
+var passes = [...]pass{
+    {name: "number lines", fn: numberLines, required: true},
+    {name: "early phielim and copyelim", fn: copyelim},
+    {name: "early deadcode", fn: deadcode}, // remove generated dead code to avoid doing pointless work during opt
+    ...
+    {name: "loop rotate", fn: loopRotate},
+    {name: "trim", fn: trim}, // remove empty blocks
+}
+```
+
+## 生成机器码
+
+如之前所言，[ssagen.Compile()](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/ssagen/pgen.go#L301) 函数内部会调用 [buildssa()](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/ssagen/ssa.go#L294) 函数生成最终的 SSA 形式的中间代码。
+
+```go
+// Compile builds an SSA backend function,
+// uses it to generate a plist,
+// and flushes that plist to machine code.
+// worker indicates which of the backend workers is doing the processing.
+func Compile(fn *ir.Func, worker int, profile *pgoir.Profile) {
+    f := buildssa(fn, worker, inline.IsPgoHotFunc(fn, profile) || inline.HasPgoHotInline(fn))
+    ...
+}
+```
+
+在此之后，会构建一个 [Progs](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/objw/prog.go#L67) 结构体，然后通过 [genssa()](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/ssagen/ssa.go#L7279) 函数，将 SSA 中间代码存入 [Progs](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/objw/prog.go#L67) 结构体中，并用来生成机器码。
+
+```go
+func Compile(fn *ir.Func, worker int, profile *pgoir.Profile) {
+    ...
+    pp := objw.NewProgs(fn, worker)
+    defer pp.Free()
+    genssa(f, pp)
+    ...
+}
+
+// Progs accumulates Progs for a function and converts them into machine code.
+type Progs struct {
+    Text       *obj.Prog  // ATEXT Prog for this function
+    Next       *obj.Prog  // next Prog
+    PC         int64      // virtual PC; count of Progs
+    Pos        src.XPos   // position to use for new Progs
+    CurFunc    *ir.Func   // fn these Progs are for
+    ...
+}
+```
+
+将所有 SSA 形式的中间代码加载完成后，会调用 [Flush()](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/objw/prog.go#L110) 方法，完成机器码的生成工作。
+
+```go
+func Compile(fn *ir.Func, worker int, profile *pgoir.Profile) {
+    ...
+    pp.Flush() // assemble, fill in boilerplate, etc.
+    ...
+}
+
+// Flush converts from pp to machine code.
+func (pp *Progs) Flush() {
+    plist := &obj.Plist{Firstpc: pp.Text, Curfn: pp.CurFunc}
+    obj.Flushplist(base.Ctxt, plist, pp.NewProg)
+}
+```
+
+## 参考
+
+- <https://github.com/golang/go/blob/master/src/cmd/compile/README.md>
+- <https://draveness.me/golang/docs/part1-prerequisite/ch02-compile/golang-compile-intro/>
