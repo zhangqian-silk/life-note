@@ -2,7 +2,7 @@
 
 ## 编译器主函数
 
-`src/cmd/compile/internal/gc/main.go` 中的 [Main()]((https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/gc/main.go#L60) ) 函数，是 Go 编译器的程序入口，会先读取命令行配置的参数，然后更新对应的编译选项和配置。
+`src/cmd/compile/internal/gc/main.go` 中的 [Main()](https://github.com/golang/go/blob/a10e42f219abb9c5bc4e7d86d9464700a42c7d57/src/cmd/compile/internal/gc/main.go#L59) 函数，是 Go 编译器的程序入口，会先读取命令行配置的参数，然后更新对应的编译选项和配置。
 
 ```go
 // Main parses flags and Go source files specified in the command-line
@@ -14,7 +14,7 @@ func Main(archInit func(*ssagen.ArchInfo)) {
 }
 ```
 
-随后会通过 [LoadPackage()](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/noder/noder.go#L27) 方法，加载并解析文件，[LoadPackage()](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/noder/noder.go#L27) 方法内部会调用 [syntax.Parse()](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/syntax/syntax.go#L66) 方法对输入文件进行词法分析与语法分析，得到抽象语法树（AST），然后进行类型检查。
+随后会通过 [LoadPackage()](https://github.com/golang/go/blob/a10e42f219abb9c5bc4e7d86d9464700a42c7d57/src/cmd/compile/internal/noder/noder.go#L27) 方法，加载并解析文件，[LoadPackage()](https://github.com/golang/go/blob/a10e42f219abb9c5bc4e7d86d9464700a42c7d57/src/cmd/compile/internal/noder/noder.go#L27) 方法内部会调用 [syntax.Parse()](https://github.com/golang/go/blob/a10e42f219abb9c5bc4e7d86d9464700a42c7d57/src/cmd/compile/internal/syntax/syntax.go#L66) 方法对输入文件进行词法分析与语法分析，得到抽象语法树（AST），然后进行类型检查。
 
 ```go
 func Main(archInit func(*ssagen.ArchInfo)) {
@@ -42,7 +42,7 @@ func LoadPackage(filenames []string) {
 }
 ```
 
-之后初始化编译器的后端程序，即 [ssagen.InitConfig()](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/ssagen/ssa.go#L72)，然后会先执行 [enqueueFunc()](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/gc/compile.go#L31) 函数，对要编译的目标函数做一些处理，例如替换函数的具体实现，并将目标函数添加至队列中。
+之后初始化编译器的后端程序，即 [ssagen.InitConfig()](https://github.com/golang/go/blob/a10e42f219abb9c5bc4e7d86d9464700a42c7d57/src/cmd/compile/internal/ssagen/ssa.go#L71)，然后会先执行 [enqueueFunc()](https://github.com/golang/go/blob/a10e42f219abb9c5bc4e7d86d9464700a42c7d57/src/cmd/compile/internal/gc/compile.go#L30) 函数，对要编译的目标函数做一些处理，例如替换函数的具体实现，并将目标函数添加至队列中。
 
 ```go
 func Main(archInit func(*ssagen.ArchInfo)) {
@@ -81,7 +81,7 @@ func enqueueFunc(fn *ir.Func) {
 }
 ```
 
-在 [compileFunctions()](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/gc/compile.go#L121) 函数中，会编译所有函数，将其转化为 SSA 形式的中间代码。
+在 [compileFunctions()](https://github.com/golang/go/blob/a10e42f219abb9c5bc4e7d86d9464700a42c7d57/src/cmd/compile/internal/gc/compile.go#L115) 函数中，会编译所有函数，将其转化为 SSA 形式的中间代码。
 
 ```go
 func Main(archInit func(*ssagen.ArchInfo)) {
@@ -105,7 +105,7 @@ func Main(archInit func(*ssagen.ArchInfo)) {
 
 ## 词法分析
 
-[词法分析](https://zh.wikipedia.org/wiki/%E8%AF%8D%E6%B3%95%E5%88%86%E6%9E%90)是计算机科学中将字符序列转换为标记（token）序列的过程，在 Golang 中，[token](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/syntax/tokens.go#L7) 主要分为五类，分别是名称、字面量、操作符、分隔符和关键字：
+[词法分析](https://zh.wikipedia.org/wiki/%E8%AF%8D%E6%B3%95%E5%88%86%E6%9E%90)是计算机科学中将字符序列转换为标记（token）序列的过程，在 Golang 中，[token](https://github.com/golang/go/blob/a10e42f219abb9c5bc4e7d86d9464700a42c7d57/src/cmd/compile/internal/syntax/tokens.go#L7) 主要分为五类，分别是名称、字面量、操作符、分隔符和关键字：
 
 ```go
 const (
@@ -135,7 +135,7 @@ const (
 )
 ```
 
-[Parse()](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/syntax/syntax.go#L66) 函数内部会构建一个 `parser` 对象，然后通过 [p.fileOrNil()](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/syntax/parser.go#L394) 方法，循环调用 [next()](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/syntax/scanner.go#L88) 方法，触发词法解析逻辑。
+[Parse()](https://github.com/golang/go/blob/a10e42f219abb9c5bc4e7d86d9464700a42c7d57/src/cmd/compile/internal/syntax/syntax.go#L66) 函数内部会构建一个 `parser` 对象，然后通过 [p.fileOrNil()](https://github.com/golang/go/blob/a10e42f219abb9c5bc4e7d86d9464700a42c7d57/src/cmd/compile/internal/syntax/parser.go#L392) 方法，循环调用 [next()](https://github.com/golang/go/blob/a10e42f219abb9c5bc4e7d86d9464700a42c7d57/src/cmd/compile/internal/syntax/scanner.go#L88) 方法，触发词法解析逻辑。
 
 ```go
 // Parse parses a single Go source file from src and returns the corresponding
@@ -160,7 +160,7 @@ func (p *parser) fileOrNil() *File {
 }
 ```
 
-[parser](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/syntax/parser.go#L18) 结构体内部嵌套了 [scaner](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/syntax/scanner.go#L30) 结构体，故 [next()](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/syntax/scanner.go#L88) 函数真正的执行逻辑，是由 [scaner](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/syntax/scanner.go#L30) 负责
+[parser](https://github.com/golang/go/blob/a10e42f219abb9c5bc4e7d86d9464700a42c7d57/src/cmd/compile/internal/syntax/parser.go#L18) 结构体内部嵌套了 [scaner](https://github.com/golang/go/blob/a10e42f219abb9c5bc4e7d86d9464700a42c7d57/src/cmd/compile/internal/syntax/scanner.go#L30) 结构体，故 [next()](https://github.com/golang/go/blob/a10e42f219abb9c5bc4e7d86d9464700a42c7d57/src/cmd/compile/internal/syntax/scanner.go#L88) 函数真正的执行逻辑，是由 [scaner](https://github.com/golang/go/blob/a10e42f219abb9c5bc4e7d86d9464700a42c7d57/src/cmd/compile/internal/syntax/scanner.go#L30) 负责
 
 ```go
 type parser struct {
@@ -174,7 +174,7 @@ func (s *scanner) next() {
 }
 ```
 
-[next()](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/syntax/scanner.go#L88) 函数内部，会先跳过一些空白符，然后针对字母或关键字进行特殊处理
+[next()](https://github.com/golang/go/blob/a10e42f219abb9c5bc4e7d86d9464700a42c7d57/src/cmd/compile/internal/syntax/scanner.go#L88) 函数内部，会先跳过一些空白符，然后针对字母或关键字进行特殊处理
 
 ```go
 func (s *scanner) next() {
@@ -233,7 +233,7 @@ redo:
 }
 ```
 
-以最常见的标准字符串，即 [stdString](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/syntax/scanner.go#L674) 为例，会循环读取后续所有字符，直至遇到下一个双引号：
+以最常见的标准字符串，即 [stdString](https://github.com/golang/go/blob/a10e42f219abb9c5bc4e7d86d9464700a42c7d57/src/cmd/compile/internal/syntax/scanner.go#L674) 为例，会循环读取后续所有字符，直至遇到下一个双引号：
 
 ```go
 func (s *scanner) stdString() {
@@ -273,7 +273,7 @@ func (s *scanner) stdString() {
 
 [语法分析](https://zh.wikipedia.org/wiki/%E8%AF%AD%E6%B3%95%E5%88%86%E6%9E%90)是根据某种给定的形式文法对由单词序列（即 token 序列）构成的输入文本进行分析并确定其语法结构的一种过程。
 
-在 golang 中，语法分析的过程，同样在 [Parse()](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/syntax/syntax.go#L66) 函数内部，由 [fileOrNil()](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/syntax/parser.go#L394) 方法进行处理，即与词法解析同步进行。
+在 golang 中，语法分析的过程，同样在 [Parse()](https://github.com/golang/go/blob/a10e42f219abb9c5bc4e7d86d9464700a42c7d57/src/cmd/compile/internal/syntax/syntax.go#L666) 函数内部，由 [fileOrNil()](https://github.com/golang/go/blob/a10e42f219abb9c5bc4e7d86d9464700a42c7d57/src/cmd/compile/internal/syntax/parser.go#L392) 方法进行处理，即与词法解析同步进行，方法最终会返回该源文件文件对应的 AST 文件。
 
 ```go
 func Parse(base *PosBase, src io.Reader, errh ErrorHandler, pragh PragmaHandler, mode Mode) (_ *File, first error) {
@@ -285,7 +285,7 @@ func Parse(base *PosBase, src io.Reader, errh ErrorHandler, pragh PragmaHandler,
 }
 ```
 
-Go 会针对每个源文件生成一个独立的 AST，即 [File](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/syntax/nodes.go#L38) 结构体，所以该方法首先会解析 `_Package` 字段，匹配包名，并保存至该结构体中。
+Go 会针对每个源文件生成一个独立的 AST，即 [File](https://github.com/golang/go/blob/a10e42f219abb9c5bc4e7d86d9464700a42c7d57/src/cmd/compile/internal/syntax/nodes.go#L38) 结构体，所以该方法首先会解析 `_Package` 字段，匹配包名，并保存至该结构体中。
 
 ```go
 type File struct {
@@ -317,7 +317,7 @@ func (p *parser) fileOrNil() *File {
 
 ```
 
-其中 [got()](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/syntax/parser.go#L193C1-L199C2) 方法会去调用一次词法分析，并判断是否是想要的 token 类型， [name()](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/syntax/parser.go#L2702) 方法会去匹配并得到一个 `_Name` 类型的 token：
+其中 [got()](https://github.com/golang/go/blob/a10e42f219abb9c5bc4e7d86d9464700a42c7d57/src/cmd/compile/internal/syntax/parser.go#L193) 方法会去调用一次词法分析，并判断是否是想要的 token 类型， [name()](https://github.com/golang/go/blob/a10e42f219abb9c5bc4e7d86d9464700a42c7d57/src/cmd/compile/internal/syntax/parser.go#L2700) 方法会去匹配并得到一个 `_Name` 类型的 token：
 
 ```go
 func (p *parser) got(tok token) bool {
@@ -338,7 +338,7 @@ func (p *parser) name() *Name {
 }
 ```
 
-紧接着会循环解析所有 `_Import` 字段，并确保 `import` 声明全部在 `package` 声明之后，在其他字段之前，[importDecl()](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/syntax/parser.go#L541) 会用来处理 `_Import` 类型：
+紧接着会循环解析所有 `_Import` 字段，并确保 `import` 声明全部在 `package` 声明之后，在其他字段之前，[importDecl()](https://github.com/golang/go/blob/a10e42f219abb9c5bc4e7d86d9464700a42c7d57/src/cmd/compile/internal/syntax/parser.go#L539) 会用来处理 `_Import` 类型：
 
 ```go
 func (p *parser) fileOrNil() *File {
@@ -398,7 +398,7 @@ func (p *parser) fileOrNil() *File {
 
 ```
 
-在匹配到对应的字段后，均会通过 [appendGroup()](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/syntax/parser.go#L520) 方法，执行对应的处理逻辑，得到该节点对应的结构体，满足 [Decl](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/syntax/nodes.go#L51C2-L54C3) 接口，并将其添加至 AST 文件的 `DeclList` 中：
+在匹配到对应的字段后，均会通过 [appendGroup()](https://github.com/golang/go/blob/a10e42f219abb9c5bc4e7d86d9464700a42c7d57/src/cmd/compile/internal/syntax/parser.go#L518) 方法，执行对应的处理逻辑，得到该节点对应的结构体，满足 [Decl](https://github.com/golang/go/blob/a10e42f219abb9c5bc4e7d86d9464700a42c7d57/src/cmd/compile/internal/syntax/nodes.go#L51) 接口，并将其添加至 AST 文件的 `DeclList` 中：
 
 ```go
 Decl interface {
@@ -435,7 +435,7 @@ func (p *parser) appendGroup(list []Decl, f func(*Group) Decl) []Decl {
 
 针对于不同的字段，处理逻辑也会有相对应的差异，并最终得到相对应的节点的结构体，每个结构体中都嵌入了 `decl` 结构体，故均满足 `Decl` 接口：
 
-- [decl](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/syntax/nodes.go#L116)
+- [decl](https://github.com/golang/go/blob/a10e42f219abb9c5bc4e7d86d9464700a42c7d57/src/cmd/compile/internal/syntax/nodes.go#L116)
 
 ```go
 type decl struct{ node }
@@ -451,7 +451,7 @@ func (n *node) SetPos(pos Pos) { n.pos = pos }
 func (*node) aNode()           {}
 ```
 
-- [importDecl()](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/syntax/parser.go#L541):[ImportDecl](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/syntax/nodes.go#L58)
+- [importDecl()](https://github.com/golang/go/blob/a10e42f219abb9c5bc4e7d86d9464700a42c7d57/src/cmd/compile/internal/syntax/parser.go#L539) : [ImportDecl](https://github.com/golang/go/blob/a10e42f219abb9c5bc4e7d86d9464700a42c7d57/src/cmd/compile/internal/syntax/nodes.go#L58)
 
 ```go
 // ImportSpec = [ "." | PackageName ] ImportPath .
@@ -472,7 +472,7 @@ type ImportDecl struct {
 }
 ```
 
-- [constDecl()](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/syntax/parser.go#L574):[ConstDecl](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/syntax/nodes.go#L69)
+- [constDecl()](https://github.com/golang/go/blob/a10e42f219abb9c5bc4e7d86d9464700a42c7d57/src/cmd/compile/internal/syntax/parser.go#L572) : [ConstDecl](https://github.com/golang/go/blob/a10e42f219abb9c5bc4e7d86d9464700a42c7d57/src/cmd/compile/internal/syntax/nodes.go#L69)
 
 ```go
 // ConstSpec = IdentifierList [ [ Type ] "=" ExpressionList ] .
@@ -494,7 +494,7 @@ type ConstDecl struct {
 }
 ```
 
-- [typeDecl()](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/syntax/parser.go#L596C18-L596C26):[typeDecl](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/syntax/nodes.go#L79)
+- [typeDecl()](https://github.com/golang/go/blob/a10e42f219abb9c5bc4e7d86d9464700a42c7d57/src/cmd/compile/internal/syntax/parser.go#L594) : [typeDecl](https://github.com/golang/go/blob/a10e42f219abb9c5bc4e7d86d9464700a42c7d57/src/cmd/compile/internal/syntax/nodes.go#L79)
 
 ```go
 // TypeSpec = identifier [ TypeParams ] [ "=" ] Type .
@@ -515,7 +515,7 @@ type TypeDecl struct {
 }
 ```
 
-- [varDecl()](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/syntax/parser.go#L747):[VarDecl](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/syntax/nodes.go#L92C2-L92C10)
+- [varDecl()](https://github.com/golang/go/blob/a10e42f219abb9c5bc4e7d86d9464700a42c7d57/src/cmd/compile/internal/syntax/parser.go#L745) : [VarDecl](https://github.com/golang/go/blob/a10e42f219abb9c5bc4e7d86d9464700a42c7d57/src/cmd/compile/internal/syntax/nodes.go#L92)
 
 ```go
 // VarSpec = IdentifierList ( Type [ "=" ExpressionList ] | "=" ExpressionList ) .
@@ -537,7 +537,7 @@ type VarDecl struct {
 }
 ```
 
-- [funcDeclOrNil()](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/syntax/parser.go#L775C18-L775C31):[funcDecl](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/syntax/nodes.go#L105)
+- [funcDeclOrNil()](https://github.com/golang/go/blob/a10e42f219abb9c5bc4e7d86d9464700a42c7d57/src/cmd/compile/internal/syntax/parser.go#L773) : [funcDecl](https://github.com/golang/go/blob/a10e42f219abb9c5bc4e7d86d9464700a42c7d57/src/cmd/compile/internal/syntax/nodes.go#L105)
 
 ```go
 // FunctionDecl = "func" FunctionName [ TypeParams ] ( Function | Signature ) .
@@ -565,11 +565,119 @@ FuncDecl struct {
 }
 ```
 
-在经过上述处理之后，最终会得到该文件对应的 AST 文件。
+在 [funcDeclOrNil()](https://github.com/golang/go/blob/a10e42f219abb9c5bc4e7d86d9464700a42c7d57/src/cmd/compile/internal/syntax/parser.go#L773) 函数内部，会调用 [funcBody()](https://github.com/golang/go/blob/a10e42f219abb9c5bc4e7d86d9464700a42c7d57/src/cmd/compile/internal/syntax/parser.go#L819) 方法与 [blockStmt()](https://github.com/golang/go/blob/a10e42f219abb9c5bc4e7d86d9464700a42c7d57/src/cmd/compile/internal/syntax/parser.go#L2240) 方法生成函数体。
+
+```go
+func (p *parser) funcDeclOrNil() *FuncDecl {
+    f := new(FuncDecl)
+    ...
+    if p.tok == _Lbrace {
+        f.Body = p.funcBody()
+    }
+
+    return f
+}
+
+func (p *parser) funcBody() *BlockStmt {
+    ...
+    body := p.blockStmt("")
+    ...
+    return body
+}
+
+func (p *parser) blockStmt(context string) *BlockStmt {
+    ...
+    s.List = p.stmtList()
+    ...
+    return s
+}
+```
+
+我们日常所编写的代码逻辑，例如函数调用，局部变量声明，逻辑判断与循环等等， 其实绝大部分都是在各个函数体中，并非是 AST 的顶级声明。
+
+在构建函数体，亦即构建 block 声明时，会调用 [stmtList()](https://github.com/golang/go/blob/a10e42f219abb9c5bc4e7d86d9464700a42c7d57/src/cmd/compile/internal/syntax/parser.go#L2654) 方法和 [stmtOrNil()](https://github.com/golang/go/blob/a10e42f219abb9c5bc4e7d86d9464700a42c7d57/src/cmd/compile/internal/syntax/parser.go#L2551) 方法来进行处理。
+
+```go
+// StatementList = { Statement ";" } .
+func (p *parser) stmtList() (l []Stmt) {
+    for p.tok != _EOF && p.tok != _Rbrace && p.tok != _Case && p.tok != _Default {
+        s := p.stmtOrNil()
+        ...
+    }
+    return
+}
+
+// stmtOrNil parses a statement if one is present, or else returns nil.
+//
+//  Statement =
+//      Declaration | LabeledStmt | SimpleStmt |
+//      GoStmt | ReturnStmt | BreakStmt | ContinueStmt | GotoStmt |
+//      FallthroughStmt | Block | IfStmt | SwitchStmt | SelectStmt | ForStmt |
+//      DeferStmt .
+func (p *parser) stmtOrNil() Stmt {
+
+}
+```
+
+在具体判断时，因为大部分语句都是 `_Name` 类型的 token，例如函数调用，变量赋值等，所以先对该类型进行判断并处理。
+
+```go
+func (p *parser) stmtOrNil() Stmt {
+    ...
+    // Most statements (assignments) start with an identifier;
+    // look for it first before doing anything more expensive.
+    if p.tok == _Name {
+        p.clearPragma()
+        lhs := p.exprList()
+        if label, ok := lhs.(*Name); ok && p.tok == _Colon {
+            return p.labeledStmtOrNil(label)
+        }
+        return p.simpleStmt(lhs, 0)
+    }
+    ...
+}
+```
+
+在之后对 `_Var`、`_Const` 和 `_Type` 三种顶级声明进行处理，需要注意的时，此时他们的作用域并非全局，而是在 block 内部。
+
+```go
+func (p *parser) stmtOrNil() Stmt {
+    ...
+    switch p.tok {
+    case _Var:
+        return p.declStmt(p.varDecl)
+
+    case _Const:
+        return p.declStmt(p.constDecl)
+
+    case _Type:
+        return p.declStmt(p.typeDecl)
+    }
+    ...
+}
+```
+
+最后是对其他关键字进行处理，例如 `_For`、`_Go`、`_Defer` 等。
+
+```go
+func (p *parser) stmtOrNil() Stmt {
+    ...
+    switch p.tok {
+    case _For:
+        return p.forStmt()
+
+    case _Go, _Defer:
+        return p.callStmt()
+    ...
+    }
+
+    return nil
+}
+```
 
 ## 节点替换
 
-在将待编译函数添加至队列中时，会先执行 [enqueueFunc()](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/gc/compile.go#L31) 函数，对要编译的目标函数做一些处理，并将目标函数添加至队列中。
+在将待编译函数添加至队列中时，会先执行 [enqueueFunc()](https://github.com/golang/go/blob/a10e42f219abb9c5bc4e7d86d9464700a42c7d57/src/cmd/compile/internal/gc/compile.go#L30) 函数，对要编译的目标函数做一些处理，并将目标函数添加至队列中。
 
 ```go
 func enqueueFunc(fn *ir.Func) {
@@ -589,7 +697,7 @@ func enqueueFunc(fn *ir.Func) {
 }
 ```
 
-在 [prepareFunc()](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/gc/compile.go#L96) 函数中，会调用 [walk.Walk](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/walk/walk.go#L24) 函数，将 AST 中的部分关键字和内建函数替换为真正的运行时函数。
+在 [prepareFunc()](https://github.com/golang/go/blob/a10e42f219abb9c5bc4e7d86d9464700a42c7d57/src/cmd/compile/internal/gc/compile.go#L90C6-L90C17) 函数中，会调用 [walk.Walk](https://github.com/golang/go/blob/a10e42f219abb9c5bc4e7d86d9464700a42c7d57/src/cmd/compile/internal/walk/walk.go#L22) 函数，将 AST 中的部分关键字和内建函数替换为真正的运行时函数。
 
 ```go
 func prepareFunc(fn *ir.Func) {
@@ -605,7 +713,7 @@ func Walk(fn *ir.Func) {
 }
 ```
 
-在 [walkStmtList()](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/walk/stmt.go#L174C6-L174C18) 会对传入的节点进行遍历处理，最终通过 [walkStmt()](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/walk/stmt.go#L15) 函数内部，针对具体语句，分别执行替换逻辑。
+在 [walkStmtList()](https://github.com/golang/go/blob/a10e42f219abb9c5bc4e7d86d9464700a42c7d57/src/cmd/compile/internal/walk/stmt.go#L174) 会对传入的节点进行遍历处理，最终通过 [walkStmt()](https://github.com/golang/go/blob/a10e42f219abb9c5bc4e7d86d9464700a42c7d57/src/cmd/compile/internal/walk/stmt.go#L15) 函数内部，针对具体语句，分别执行替换逻辑。
 
 ```go
 func walkStmtList(s []ir.Node) {
@@ -615,7 +723,7 @@ func walkStmtList(s []ir.Node) {
 }
 ```
 
-例如对于 `OPANIC` 等语句，会额外调用 [walkExpr()](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/walk/expr.go#L29) 进行处理，将 `panic` 关键字，转化为调用 `gopanic()` 函数：
+例如对于 `OPANIC` 等语句，会额外调用 [walkExpr()](https://github.com/golang/go/blob/a10e42f219abb9c5bc4e7d86d9464700a42c7d57/src/cmd/compile/internal/walk/expr.go#L29) 进行处理，将 `panic` 关键字，转化为调用 `gopanic()` 函数：
 
 ```go
 func walkStmt(n ir.Node) ir.Node {
@@ -663,7 +771,7 @@ func walkStmt(n ir.Node) ir.Node {
 }
 ```
 
-对于部分语句，例如 `ORANGE`，直接在 `walkStmt()` 函数中，调用具体的处理逻辑，即 [walkRange()](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/walk/range.go#L40)，函数内部将 `ORANGE` 语句转化为 `FORStme` 语句，并根据具体元素，数组、切片、哈希表等，添加不同的处理逻辑。
+对于部分语句，例如 `ORANGE`，直接在 `walkStmt()` 函数中，调用具体的处理逻辑，即 [walkRange()](https://github.com/golang/go/blob/a10e42f219abb9c5bc4e7d86d9464700a42c7d57/src/cmd/compile/internal/walk/range.go#L40)，函数内部将 `ORANGE` 节点转化为 `OFOR` 节点，并根据具体元素，数组、切片、哈希表等，添加不同的处理逻辑。
 
 ```go
 func walkStmt(n ir.Node) ir.Node {
@@ -697,7 +805,7 @@ func walkRange(nrange *ir.RangeStmt) ir.Node {
 
 ## 生成中间代码
 
-经过 `walk` 系列函数处理之后，会得到最终的抽象语法树，`range`、`panic` 等类似语法糖的语句，也会被转化为真正的实现语句，此时会在 [compileFunctions()](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/gc/compile.go#L121) 函数中会通过 [ssagen.Compile()](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/ssagen/pgen.go#L301) 函数，执行具体编译逻辑，并最终生成中间代码。
+经过 `walk` 系列函数处理之后，会得到最终的抽象语法树，`range`、`panic` 等类似语法糖的语句，也会被转化为真正的实现语句，此时会在 [compileFunctions()](https://github.com/golang/go/blob/a10e42f219abb9c5bc4e7d86d9464700a42c7d57/src/cmd/compile/internal/gc/compile.go#L115) 函数中会通过 [ssagen.Compile()](https://github.com/golang/go/blob/a10e42f219abb9c5bc4e7d86d9464700a42c7d57/src/cmd/compile/internal/ssagen/pgen.go#L215) 函数，执行具体编译逻辑，并最终生成中间代码。
 
 ```go
 // compileFunctions compiles all functions in compilequeue.
@@ -716,7 +824,7 @@ func compileFunctions(profile *pgoir.Profile) {
             })
         }
     }
-
+    ...
     compile(compilequeue)
     compilequeue = nil
     wg.Wait()
@@ -724,7 +832,7 @@ func compileFunctions(profile *pgoir.Profile) {
 }
 ```
 
-[ssagen.Compile()](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/ssagen/pgen.go#L301) 函数内部会调用 [buildssa()](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/ssagen/ssa.go#L294) 函数，执行具体的编译操作，函数内部会首先调用 [stmtList()](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/ssagen/ssa.go#L1440) 函数，将所有 AST 节点转化为 SSA 形式的中间代码，然后再调用 [compile()](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/ssa/compile.go#L30) 函数，进行优化。
+[ssagen.Compile()](https://github.com/golang/go/blob/a10e42f219abb9c5bc4e7d86d9464700a42c7d57/src/cmd/compile/internal/ssagen/pgen.go#L215) 函数内部会调用 [buildssa()](https://github.com/golang/go/blob/a10e42f219abb9c5bc4e7d86d9464700a42c7d57/src/cmd/compile/internal/ssagen/ssa.go#L293) 函数，执行具体的编译操作，函数内部会首先调用 [stmtList()](https://github.com/golang/go/blob/a10e42f219abb9c5bc4e7d86d9464700a42c7d57/src/cmd/compile/internal/ssagen/ssa.go#L1424) 函数，将所有 AST 节点转化为 SSA 形式的中间代码，然后再调用 [compile()](https://github.com/golang/go/blob/a10e42f219abb9c5bc4e7d86d9464700a42c7d57/src/cmd/compile/internal/ssa/compile.go#L30) 函数，进行优化。
 
 ```go
 // Compile builds an SSA backend function,
@@ -754,7 +862,7 @@ func (s *state) stmtList(l ir.Nodes) {
 }
 ```
 
-[stmt()](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/ssagen/ssa.go#L1447) 函数负责根据节点操作符的不同，将 AST 节点转化为 SSA 形式的中间代码，例如常见的 `go`、`if`、`return`、`for` 等等。
+[stmt()](https://github.com/golang/go/blob/a10e42f219abb9c5bc4e7d86d9464700a42c7d57/src/cmd/compile/internal/ssagen/ssa.go#L1431) 函数负责根据节点操作符的不同，将 AST 节点转化为 SSA 形式的中间代码，例如常见的 `go`、`if`、`return`、`for` 等等。
 
 ```go
 func (s *state) stmt(n ir.Node) {
@@ -781,7 +889,7 @@ func (s *state) stmt(n ir.Node) {
 }
 ```
 
-[compile()](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/ssa/compile.go#L30) 函数内部，会调用多种处理函数进行优化处理，即 [passes](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/ssa/compile.go#L457C1-L511C1)，处理函数内部也会根据架构不同，执行相对应的策略，函数会构建出最终的 SSA 形式的中间代码。
+[Compile()](https://github.com/golang/go/blob/a10e42f219abb9c5bc4e7d86d9464700a42c7d57/src/cmd/compile/internal/ssa/compile.go#L30) 函数内部，会调用多种处理函数进行优化处理，即 [passes](https://github.com/golang/go/blob/a10e42f219abb9c5bc4e7d86d9464700a42c7d57/src/cmd/compile/internal/ssa/compile.go#L457)，处理函数内部也会根据架构不同，执行相对应的策略，函数会构建出最终的 SSA 形式的中间代码。
 
 ```go
 func Compile(f *Func) {
@@ -806,7 +914,7 @@ var passes = [...]pass{
 
 ## 生成机器码
 
-如之前所言，[ssagen.Compile()](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/ssagen/pgen.go#L301) 函数内部会调用 [buildssa()](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/ssagen/ssa.go#L294) 函数生成最终的 SSA 形式的中间代码。
+如之前所言，[ssagen.Compile()](https://github.com/golang/go/blob/a10e42f219abb9c5bc4e7d86d9464700a42c7d57/src/cmd/compile/internal/ssagen/pgen.go#L215) 函数内部会调用 [buildssa()](https://github.com/golang/go/blob/a10e42f219abb9c5bc4e7d86d9464700a42c7d57/src/cmd/compile/internal/ssagen/ssa.go#L293) 函数生成最终的 SSA 形式的中间代码。
 
 ```go
 // Compile builds an SSA backend function,
@@ -819,7 +927,7 @@ func Compile(fn *ir.Func, worker int, profile *pgoir.Profile) {
 }
 ```
 
-在此之后，会构建一个 [Progs](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/objw/prog.go#L67) 结构体，然后通过 [genssa()](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/ssagen/ssa.go#L7279) 函数，将 SSA 中间代码存入 [Progs](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/objw/prog.go#L67) 结构体中，并用来生成机器码。
+在此之后，会构建一个 [Progs](https://github.com/golang/go/blob/a10e42f219abb9c5bc4e7d86d9464700a42c7d57/src/cmd/compile/internal/objw/prog.go#L67) 结构体，然后通过 [genssa()](https://github.com/golang/go/blob/a10e42f219abb9c5bc4e7d86d9464700a42c7d57/src/cmd/compile/internal/ssagen/ssa.go#L7252) 函数，将 SSA 中间代码存入 [Progs](https://github.com/golang/go/blob/a10e42f219abb9c5bc4e7d86d9464700a42c7d57/src/cmd/compile/internal/objw/prog.go#L67) 结构体中，并用来生成机器码。
 
 ```go
 func Compile(fn *ir.Func, worker int, profile *pgoir.Profile) {
@@ -841,7 +949,7 @@ type Progs struct {
 }
 ```
 
-将所有 SSA 形式的中间代码加载完成后，会调用 [Flush()](https://github.com/golang/go/blob/3959d54c0bd5c92fe0a5e33fedb0595723efc23b/src/cmd/compile/internal/objw/prog.go#L110) 方法，完成机器码的生成工作。
+将所有 SSA 形式的中间代码加载完成后，会调用 [Flush()](https://github.com/golang/go/blob/a10e42f219abb9c5bc4e7d86d9464700a42c7d57/src/cmd/compile/internal/objw/prog.go#L110) 方法，完成机器码的生成工作。
 
 ```go
 func Compile(fn *ir.Func, worker int, profile *pgoir.Profile) {
@@ -859,5 +967,5 @@ func (pp *Progs) Flush() {
 
 ## 参考
 
-- <https://github.com/golang/go/blob/master/src/cmd/compile/README.md>
+- <https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/README.md>
 - <https://draveness.me/golang/docs/part1-prerequisite/ch02-compile/golang-compile-intro/>
