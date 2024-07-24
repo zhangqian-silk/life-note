@@ -6,7 +6,7 @@
 
 ### hamp
 
-在 Golang 中，`map` 类型实质上就是哈希表。数据结构 [hamp](https://github.com/golang/go/blob/e3d87d19320001e6081449550292d76ef660ab03/src/runtime/map.go#L109) 如下所示：
+在 Golang 中，`map` 类型实质上就是哈希表。数据结构 [hamp](https://github.com/golang/go/blob/go1.22.0/src/runtime/map.go#L117) 如下所示：
 
 - `count`：当前哈希表的大小，即哈希表中元素的数量，可以通过 `len` 函数获取
 - `flags`：当前哈希表的状态，用于并发控制
@@ -49,7 +49,7 @@ type hmap struct {
 
 Golang 在最终查询哈希表中数据时，会先通过低 B 位确认桶号，再通过高 8 位来进行初步数据匹配，以提高查询效率。
 
-相对应的，桶的数据结构为 [bmap](https://github.com/golang/go/blob/377646589d5fb0224014683e0d1f1db35e60c3ac/src/runtime/map.go#L143)，其中 `tophash` 则用来存储哈希值的高 8 位的数组，加速数据匹配，数组长度为 `abi.MapBucketCount`，即 8 位，表示一个桶最多存放 8 个元素。
+相对应的，桶的数据结构为 [bmap](https://github.com/golang/go/blob/go1.22.0/src/runtime/map.go#L151)，其中 `tophash` 则用来存储哈希值的高 8 位的数组，加速数据匹配，数组长度为 `bucketCnt`，即 8 位，表示一个桶最多存放 8 个元素。
 
 ```go
 const (
@@ -58,12 +58,16 @@ const (
     MapBucketCount     = 1 << MapBucketCountBits
 )
 
+const (
+    bucketCnt     = abi.MapBucketCount
+)
+
 type bmap struct {
-    tophash [abi.MapBucketCount]uint8
+    tophash [bucketCnt]uint8
 }
 ```
 
-在某些特殊情况下，桶中的 `tophash` 还会被用来存储特定的[标记位](https://github.com/golang/go/blob/377646589d5fb0224014683e0d1f1db35e60c3ac/src/runtime/map.go#L86)：
+在某些特殊情况下，桶中的 `tophash` 还会被用来存储特定的[标记位](https://github.com/golang/go/blob/go1.22.0/src/runtime/map.go#L94)：
 
 - `emptyRest`：当前位置以及后续位置，包括溢出桶，都是空值
 - `emptyOne`：当前位置是空值
@@ -83,32 +87,32 @@ const (
 )
 ```
 
-此外，因为哈希表中存储的元素的数据结构不固定，所以桶具体的数据结构在编译期才会动态确认，类型生成方法为 [MapBucketType](https://github.com/golang/go/blob/377646589d5fb0224014683e0d1f1db35e60c3ac/src/cmd/compile/internal/reflectdata/reflect.go#L73)，最终的数据结构如下所示：
+此外，因为哈希表中存储的元素的数据结构不固定，所以桶具体的数据结构在编译期才会动态确认，类型生成方法为 [MapBucketType](https://github.com/golang/go/blob/a10e42f219abb9c5bc4e7d86d9464700a42c7d57/src/cmd/compile/internal/reflectdata/reflect.go#L91)，最终的数据结构如下所示：
 
 - `keys` & `elems`：最终存储的键值对的数组，数组内元素类型为 key 和 value 对应的类型，数组长度同样为 8 位，与 `tophash` 保持一致
 - `overflow`：指向溢出桶，当发生哈希碰撞，且当前桶中元素已经超过 8 个时，会临时建立溢出桶，通过链表的方式进行维护
 
 ```go
-func MapBucketType(t *types.Type) *types.Type {
-    // Builds a type representing a Bucket structure for
-    // the given map type. This type is not visible to users -
-    // we include only enough information to generate a correct GC
-    // program for it.
-    // Make sure this stays in sync with runtime/map.go.
+// Builds a type representing a Bucket structure for
+// the given map type. This type is not visible to users -
+// we include only enough information to generate a correct GC
+// program for it.
+// Make sure this stays in sync with runtime/map.go.
 
-    //     A "bucket" is a "struct" {
-    //             tophash [abi.MapBucketCount]uint8
-    //             keys [abi.MapBucketCount]keyType
-    //             elems [abi.MapBucketCount]elemType
-    //             overflow *bucket
-    //         }
+//     A "bucket" is a "struct" {
+//             tophash [abi.MapBucketCount]uint8
+//             keys [abi.MapBucketCount]keyType
+//             elems [abi.MapBucketCount]elemType
+//             overflow *bucket
+//         }
+func MapBucketType(t *types.Type) *types.Type {
     ...
 }
 ```
 
 ### mapextra
 
-在 [MapBucketType()](https://github.com/golang/go/blob/377646589d5fb0224014683e0d1f1db35e60c3ac/src/cmd/compile/internal/reflectdata/reflect.go#L73) 中，对于 `overflow` 的类型生成有如下一段逻辑
+在 [MapBucketType()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/reflectdata/reflect.go#L91) 中，对于 `overflow` 的类型生成有如下一段逻辑
 
 ```go
 func MapBucketType(t *types.Type) *types.Type {
@@ -132,7 +136,7 @@ func MapBucketType(t *types.Type) *types.Type {
 
 而当 key 和 value 均不包含指针时，`overflow` 为 `uintptr` 类型，此时整个 `bmap` 不存在任何指针元素（对于 GC 来说，`uintptr` 不会被认为是引用类型），从而避免了 GC 时的扫描成本。
 
-但是对于溢出桶来说，此时会存在 GC 的问题，故需要另外一个存储结构，直接引用这些溢出桶，即 `hamp` 中的一个可选的 `extra` 字段，数据类型为 [mapextra](https://github.com/golang/go/blob/377646589d5fb0224014683e0d1f1db35e60c3ac/src/runtime/map.go#L126)：
+但是对于溢出桶来说，此时会存在 GC 的问题，故需要另外一个存储结构，直接引用这些溢出桶，即 `hamp` 中的一个可选的 `extra` 字段，数据类型为 [mapextra](https://github.com/golang/go/blob/go1.22.0/src/runtime/map.go#L134)：
 
 ```go
 type mapextra struct {
@@ -173,7 +177,7 @@ m2["key_m2_2"] = 2
 m3 := make(map[string]int, 4)
 ```
 
-当未指定元素数量，或元素数量小于一个桶中元素的数量（8 个）时，会调用 [makemap_small()](https://github.com/golang/go/blob/377646589d5fb0224014683e0d1f1db35e60c3ac/src/runtime/map.go#L296C6-L296C19) 来创建哈希表，此时仅会创建一个空的哈希表，并指定哈希种子，在编译时才会具体分配其他属性的内存空间。
+当未指定元素数量，或元素数量小于一个桶中元素的数量（8 个）时，会调用 [makemap_small()](https://github.com/golang/go/blob/go1.22.0/src/runtime/map.go#L294) 来创建哈希表，此时仅会创建一个空的哈希表，并指定哈希种子，在编译时才会具体分配其他属性的内存空间。
 
 ```go
 // makemap_small implements Go map creation for make(map[k]v) and
@@ -186,7 +190,7 @@ func makemap_small() *hmap {
 }
 ```
 
-对于其他场景，最终会调用 [makemap()](https://github.com/golang/go/blob/377646589d5fb0224014683e0d1f1db35e60c3ac/src/runtime/map.go#L318) 函数来创建哈希表：
+对于其他场景，最终会调用 [makemap()](https://github.com/golang/go/blob/go1.22.0/src/runtime/map.go#L305) 函数来创建哈希表：
 
 - 先进行内存空间溢出判断，此时按照极限情况下，每个桶中仅分配一个元素来计算，如果有溢出风险，则将 `hint` 值置为 0，按照最小值来分配内存
 - 初始化哈希表，并指定随机种子，与 `makemap_small` 逻辑一致
@@ -236,7 +240,7 @@ func makemap(t *maptype, hint int, h *hmap) *hmap {
 
 对于 Golang 来说，负载因子又可以表示为 $loadFactor = num_{elems} / (2^B)$，此外，每个桶中最多可以容纳 8 个元素，负载因子的最大值也同样为 8。
 
-对于负载因子具体的取值，可以参考注释中给出的[测试报告](https://github.com/golang/go/blob/377646589d5fb0224014683e0d1f1db35e60c3ac/src/runtime/map.go#L33)：
+对于负载因子具体的取值，可以参考注释中给出的[测试报告](https://github.com/golang/go/blob/go1.22.0/src/runtime/map.go#L33)：
 
 - loadFactor：负载因子
 - %overflow：溢出率
@@ -278,7 +282,7 @@ const (
 
 ### 内存分配
 
-在初始化时，内存的预分配，也会根据负载因子来进行判断，在 [overLoadFactor()](https://github.com/golang/go/blob/377646589d5fb0224014683e0d1f1db35e60c3ac/src/runtime/map.go#L1179) 函数中，当元素数量小于一个桶时，直接返回 `false`，此时 B 的值为 0，相对应的桶的数量为 $2^0=1$，足够容纳所有元素。
+在初始化时，内存的预分配，也会根据负载因子来进行判断，在 [overLoadFactor()](https://github.com/golang/go/blob/go1.22.0/src/runtime/map.go#L1097) 函数中，当元素数量小于一个桶时，直接返回 `false`，此时 B 的值为 0，相对应的桶的数量为 $2^0=1$，足够容纳所有元素。
 
 当元素数量大于一个桶时，是否超过负载因子的判断从 $(num_{elems} / (2^B)) > loadFactor$ 优化为了判断 $num_{elems} > (loadFactorNum * (2^B / loadFactorDen))$，会扩大 B 的值，直至满足负载因子。
 
@@ -295,7 +299,7 @@ func makemap(t *maptype, hint int, h *hmap) *hmap {
 
 // overLoadFactor reports whether count items placed in 1<<B buckets is over loadFactor.
 func overLoadFactor(count int, B uint8) bool {
-    return count > abi.MapBucketCount && uintptr(count) > loadFactorNum*(bucketShift(B)/loadFactorDen)
+    return count > bucketCnt && uintptr(count) > loadFactorNum*(bucketShift(B)/loadFactorDen)
 }
 
 // bucketShift returns 1<<b, optimized for code generation.
@@ -304,7 +308,7 @@ func bucketShift(b uint8) uintptr {
 }
 ```
 
-在计算出合适的桶的数量后，将通过 [makeBucketArray()](https://github.com/golang/go/blob/377646589d5fb0224014683e0d1f1db35e60c3ac/src/runtime/map.go#L359) 函数来创建桶数组：
+在计算出合适的桶的数量后，将通过 [makeBucketArray()](https://github.com/golang/go/blob/go1.22.0/src/runtime/map.go#L346) 函数来创建桶数组：
 
 ```go
 func makemap(t *maptype, hint int, h *hmap) *hmap {
@@ -389,14 +393,14 @@ m["key_1"] = 100
 fmt.Println(m) // "map[key_1:100 key_2:2]"
 ```
 
-在底层，则是通过 [mapassign()](https://github.com/golang/go/blob/377646589d5fb0224014683e0d1f1db35e60c3ac/src/runtime/map.go#L614) 函数实现相关功能：
+在底层，则是通过 [mapassign()](https://github.com/golang/go/blob/go1.22.0/src/runtime/map.go#L579) 函数实现相关功能：
 
 - 判断 key 是否已经存在，若存在则修改 value 值
 - 若 key 不存在，则寻找可插入新数据的位置
 - 若不存在可插入位置，则触发扩容或是新增溢出桶进行存储
 - 最终返回 value 对象对应的指针，由函数调用方进行修改
 
-#### [mapassign()](https://github.com/golang/go/blob/377646589d5fb0224014683e0d1f1db35e60c3ac/src/runtime/map.go#L614) 函数
+#### [mapassign()](https://github.com/golang/go/blob/go1.22.0/src/runtime/map.go#L579) 函数
 
 函数详细介绍如下：
 
@@ -589,9 +593,9 @@ fmt.Println(m) // "map[key_1:100 key_2:2]"
     }
     ```
 
-#### [newoverflow()](https://github.com/golang/go/blob/13c49096fd3b08ef53742dd7ae8bcfbfa45f3173/src/runtime/map.go#L239) 函数
+#### [newoverflow()](https://github.com/golang/go/blob/go1.22.0/src/runtime/map.go#L247) 函数
 
-一个哈希桶中最多可以存放 8 个元素，当哈希冲突超过这个数值时，需要使用溢出桶来存放新增元素。当需要新增溢出桶时，会通过 [newoverflow()](https://github.com/golang/go/blob/13c49096fd3b08ef53742dd7ae8bcfbfa45f3173/src/runtime/map.go#L239) 函数处理相关逻辑。
+一个哈希桶中最多可以存放 8 个元素，当哈希冲突超过这个数值时，需要使用溢出桶来存放新增元素。当需要新增溢出桶时，会通过 [newoverflow()](https://github.com/golang/go/blob/go1.22.0/src/runtime/map.go#L247) 函数处理相关逻辑。
 
 - 创建溢出桶
   - 优先判断哈希表中的 `extra.nextOverflow` 指针是否为空，若非空，则说明创建哈希表时，预分配的溢出桶还存在，可以直接使用
@@ -665,9 +669,9 @@ fmt.Println(m) // "map[key_1:100 key_2:2]"
     fmt.Println(res1, res2, ok) // "1 0 false"
     ```
 
-两种形式在底层实现分别为 [mapaccess1()](https://github.com/golang/go/blob/eaa7d9ff86b35c72cc35bd7c14b349fa414c392f/src/runtime/map.go#L409) 和 [mapaccess2()](https://github.com/golang/go/blob/eaa7d9ff86b35c72cc35bd7c14b349fa414c392f/src/runtime/map.go#L479C6-L479C16)，唯一的差异点仅在于返回值。函数内部主要功能为查找 key 所对应的值，与写操作时的逻辑基本一致。
+两种形式在底层实现分别为 [mapaccess1()](https://github.com/golang/go/blob/go1.22.0/src/runtime/map.go#L396) 和 [mapaccess2()](https://github.com/golang/go/blob/go1.22.0/src/runtime/map.go#L457)，唯一的差异点仅在于返回值。函数内部主要功能为查找 key 所对应的值，与写操作时的逻辑基本一致。
 
-#### [mapaccess2()](https://github.com/golang/go/blob/eaa7d9ff86b35c72cc35bd7c14b349fa414c392f/src/runtime/map.go#L479C6-L479C16)
+#### [mapaccess2()](https://github.com/golang/go/blob/go1.22.0/src/runtime/map.go#L457)
 
 以 `mapaccess2()` 函数为例，详细介绍如下：
 
@@ -780,9 +784,9 @@ delete(m, "key_1")
 fmt.Println(m) // "map[key_2:2]"
 ```
 
-底层通过 [mapdelete()](https://github.com/golang/go/blob/499de42188ee0b0680aec4c49e25594456fdf15a/src/runtime/map.go#L741) 函数来实现相关能力，核心逻辑与读、写操作较为一致，均是通过哈希值定位哈希桶，再通过遍历找到 key 值，但是在找到 key 值并删除数据的基础上，还进行了很多优化处理。
+底层通过 [mapdelete()](https://github.com/golang/go/blob/go1.22.0/src/runtime/map.go#L696) 函数来实现相关能力，核心逻辑与读、写操作较为一致，均是通过哈希值定位哈希桶，再通过遍历找到 key 值，但是在找到 key 值并删除数据的基础上，还进行了很多优化处理。
 
-#### [mapdelete()](https://github.com/golang/go/blob/499de42188ee0b0680aec4c49e25594456fdf15a/src/runtime/map.go#L741)
+#### [mapdelete()](https://github.com/golang/go/blob/go1.22.0/src/runtime/map.go#L696)
 
 函数逻辑介绍如下所示：
 
@@ -839,7 +843,7 @@ fmt.Println(m) // "map[key_2:2]"
     ```go
     func mapdelete(t *maptype, h *hmap, key unsafe.Pointer) {
         ...
-        search:
+    search:
         for ; b != nil; b = b.overflow(t) {
             for i := uintptr(0); i < abi.MapBucketCount; i++ {
                 if b.tophash[i] != top {
@@ -877,7 +881,7 @@ fmt.Println(m) // "map[key_2:2]"
     ```go
     func mapdelete(t *maptype, h *hmap, key unsafe.Pointer) {
         ...
-        search:
+    search:
         for ; b != nil; b = b.overflow(t) {
             for i := uintptr(0); i < abi.MapBucketCount; i++ {
                 ...
@@ -911,7 +915,7 @@ fmt.Println(m) // "map[key_2:2]"
     ```go
     func mapdelete(t *maptype, h *hmap, key unsafe.Pointer) {
         ...
-        search:
+    search:
         for ; b != nil; b = b.overflow(t) {
             for i := uintptr(0); i < abi.MapBucketCount; i++ {
                 ...
@@ -942,7 +946,7 @@ fmt.Println(m) // "map[key_2:2]"
     ```go
     func mapdelete(t *maptype, h *hmap, key unsafe.Pointer) {
         ...
-        search:
+    search:
         for ; b != nil; b = b.overflow(t) {
             for i := uintptr(0); i < abi.MapBucketCount; i++ {
                 ...
@@ -978,7 +982,7 @@ fmt.Println(m) // "map[key_2:2]"
     ```go
     func mapdelete(t *maptype, h *hmap, key unsafe.Pointer) {
         ...
-        search:
+    search:
         for ; b != nil; b = b.overflow(t) {
             for i := uintptr(0); i < abi.MapBucketCount; i++ {
                 ...
@@ -1007,7 +1011,7 @@ fmt.Println(m) // "map[key_2:2]"
 - 修改 map 变量的引用，原本的变量被 GC 回收
 - 循环调用 `delete` 函数
 
-在直观对比上，方法一更简洁，但是会存在一定的资源浪费，方法二遍历操作会有额外耗时，但是实际上编译器会对方法二做一定优化，最终调用 [mapclear()](https://github.com/golang/go/blob/44f18706661db8b865719d15a5cfa0515d1a4fca/src/runtime/map.go#L1075C6-L1075C14) 函数进行处理，将 hashmap 相关的一系列标记位进行重置，例如：
+在直观对比上，方法一更简洁，但是会存在一定的资源浪费，方法二遍历操作会有额外耗时，但是实际上编译器会对方法二做一定优化，最终调用 [mapclear()](https://github.com/golang/go/blob/go1.22.0/src/runtime/map.go#L989) 函数进行处理，将 hashmap 相关的一系列标记位进行重置，例如：
 
 - 修改 count 值为 0
 - 修改所有位置的 tophash 值为 `emptyRest`
@@ -1016,7 +1020,7 @@ fmt.Println(m) // "map[key_2:2]"
 
 ## 扩容
 
-哈希表在初始化时，会根据容量来进行内存分配，但是在不断插入新数据后，不可避免的会导致性能的劣化，在 [mapassign()](https://github.com/golang/go/blob/377646589d5fb0224014683e0d1f1db35e60c3ac/src/runtime/map.go#L614) 函数中有提到，在如下两种情况，会触发扩容操作：
+哈希表在初始化时，会根据容量来进行内存分配，但是在不断插入新数据后，不可避免的会导致性能的劣化，在 [mapassign()](https://github.com/golang/go/blob/go1.22.0/src/runtime/map.go#L579) 函数中有提到，在如下两种情况，会触发扩容操作：
 
 - 负载因子过高（与初始化时判断 B 的大小的方法一致）
 - 溢出桶过多（接近普通桶的数量）
@@ -1034,12 +1038,12 @@ fmt.Println(m) // "map[key_2:2]"
     }
     ```
 
-在 [hashGrow()](https://github.com/golang/go/blob/e8ee1dc4f9e2632ba1018610d1a1187743ae397f/src/runtime/map.go#L1139) 函数内部执行扩容操作时，也会根据两种情况的不同，来进行不同的扩容操作：
+在 [hashGrow()](https://github.com/golang/go/blob/go1.22.0/src/runtime/map.go#L1053) 函数内部执行扩容操作时，也会根据两种情况的不同，来进行不同的扩容操作：
 
 - 增量扩容 & 负载因子过高：此时说明 map 内部元素的填充率较高，需要更大的容量
 - 等量扩容 & 溢出桶过多：此时说明 map 内部元素数量可能并不多，但是由于其他原因，导致数据分布较为松散，溢出桶数量较多，比如不停的插入数据后再删除数据，此时重新调整元素位置即可
 
-### [hashGrow()](https://github.com/golang/go/blob/e8ee1dc4f9e2632ba1018610d1a1187743ae397f/src/runtime/map.go#L1139)
+### [hashGrow()](https://github.com/golang/go/blob/go1.22.0/src/runtime/map.go#L1053)
 
 - 设置标记位
   - 通过负载因子，区分增量扩容和等量扩容
@@ -1122,7 +1126,7 @@ fmt.Println(m) // "map[key_2:2]"
     }
     ```
 
-最后，需要注意的是，完整的扩容是个耗时操作，`hashGrow()` 函数仅仅完成了初始化的部分，数据的迁移操作会分散在之后的访问中通过 [growWork()](https://github.com/golang/go/blob/e8ee1dc4f9e2632ba1018610d1a1187743ae397f/src/runtime/map.go#L1226) 和 [evacuate()](https://github.com/golang/go/blob/e8ee1dc4f9e2632ba1018610d1a1187743ae397f/src/runtime/map.go#L1250) 进行处理，用以优化单次的性能。
+最后，需要注意的是，完整的扩容是个耗时操作，`hashGrow()` 函数仅仅完成了初始化的部分，数据的迁移操作会分散在之后的访问中通过 [growWork()](https://github.com/golang/go/blob/go1.22.0/src/runtime/map.go#L1140) 和 [evacuate()](https://github.com/golang/go/blob/go1.22.0/src/runtime/map.go#L1164) 进行处理，用以优化单次的性能。
 
 ```go
 func hashGrow(t *maptype, h *hmap) {
@@ -1132,9 +1136,9 @@ func hashGrow(t *maptype, h *hmap) {
 }
 ```
 
-### [growWork()](https://github.com/golang/go/blob/e8ee1dc4f9e2632ba1018610d1a1187743ae397f/src/runtime/map.go#L1226)
+### [growWork()](https://github.com/golang/go/blob/go1.22.0/src/runtime/map.go#L1140)
 
-在写入和删除时，会通过 [growing()](https://github.com/golang/go/blob/e8ee1dc4f9e2632ba1018610d1a1187743ae397f/src/runtime/map.go#L1203) 函数判断当前是否处于扩容状态，进而调用 `growWork()` 方法进行处理，以 `mapassign()` 函数为例：
+在写入和删除时，会通过 [growing()](https://github.com/golang/go/blob/go1.22.0/src/runtime/map.go#L1117) 函数判断当前是否处于扩容状态，进而调用 `growWork()` 方法进行处理，以 `mapassign()` 函数为例：
 
 ```go
 func mapassign(t *maptype, h *hmap, key unsafe.Pointer) unsafe.Pointer {
@@ -1173,7 +1177,7 @@ func (h *hmap) growing() bool {
     }
     ```
 
-### [evacuate()](https://github.com/golang/go/blob/e8ee1dc4f9e2632ba1018610d1a1187743ae397f/src/runtime/map.go#L1250)
+### [evacuate()](https://github.com/golang/go/blob/go1.22.0/src/runtime/map.go#L1164)
 
 在数据迁移时，重点是区分迁移前后，哈希桶中元素的重新分配：
 
@@ -1508,7 +1512,7 @@ func evacuate(t *maptype, h *hmap, oldbucket uintptr) {
 }
 ```
 
-### [advanceEvacuationMark()](https://github.com/golang/go/blob/e8ee1dc4f9e2632ba1018610d1a1187743ae397f/src/runtime/map.go#L1364)
+### [advanceEvacuationMark()](https://github.com/golang/go/blob/go1.22.0/src/runtime/map.go#L1278)
 
 hashmap 在扩容时，新的内存空间以及相关标识位都会完成初始化操作，但是数据的迁移是渐进式的操作，用于优化单次操作的性能，在每一次数据按顺序迁移完，会通过 `advanceEvacuationMark()` 函数来处理迁移进度相关的逻辑。
 

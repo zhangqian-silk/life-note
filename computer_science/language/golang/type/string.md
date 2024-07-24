@@ -5,7 +5,7 @@
 
 ## 底层结构
 
-字符串的底层数据结构包含了指向字节数组的指针和数组长度，在 `runtime` 包中，可以看到类似的内部使用的 `string` 的结构体 [stringStruct](https://github.com/golang/go/blob/960fa9bf66139e535d89934f56ae20a0e679e203/src/runtime/string.go#L232)：
+字符串的底层数据结构包含了指向字节数组的指针和数组长度，在 `runtime` 包中，可以看到类似的内部使用的 `string` 的结构体 [stringStruct](https://github.com/golang/go/blob/go1.22.0/src/runtime/string.go#L232)：
 
 ```go
 type stringStruct struct {
@@ -14,7 +14,7 @@ type stringStruct struct {
 }
 ```
 
-而在 `reflect` 包中，可以看到 `string` 结构体在运行时的表现形式 [stringHeader](https://github.com/golang/go/blob/960fa9bf66139e535d89934f56ae20a0e679e203/src/reflect/value.go#L2832)：
+而在 `reflect` 包中，可以看到 `string` 结构体在运行时的表现形式 [stringHeader](https://github.com/golang/go/blob/go1.22.0/src/reflect/value.go#L2840)：
 
 ```go
 // StringHeader is the runtime representation of a string.
@@ -26,7 +26,7 @@ type StringHeader struct {
 }
 ```
 
-在老版本中，借助于上面暴露出的结构体，开发者可以实现 `string` 与 `slice` 的零拷贝的转换，但是因为 `Data` 的实际类型为 `uintprt`，没有任何类型校验，往往会导致非预期的行为产生，在高版本（Go 1.20）中，上述结构体被标记废弃，并在 `unsafe` 包中提供了类似能力，但是提供了类型安全的构建 `sting` 的方法 [String](https://github.com/golang/go/blob/960fa9bf66139e535d89934f56ae20a0e679e203/src/unsafe/unsafe.go#L262)：
+在老版本中，借助于上面暴露出的结构体，开发者可以实现 `string` 与 `slice` 的零拷贝的转换，但是因为 `Data` 的实际类型为 `uintprt`，没有任何类型校验，往往会导致非预期的行为产生，在高版本（Go 1.20）中，上述结构体被标记废弃，并在 `unsafe` 包中提供了类似能力，但是提供了类型安全的构建 `sting` 的方法 [String](https://github.com/golang/go/blob/go1.22.0/src/unsafe/unsafe.go#L262)：
 
 ```go
 // String returns a string value whose underlying bytes
@@ -74,7 +74,7 @@ t = `{"key": "value"}`
 
 ### 解析方式
 
-在扫描器中的 [next()](https://github.com/golang/go/blob/960fa9bf66139e535d89934f56ae20a0e679e203/src/cmd/compile/internal/syntax/scanner.go#L88) 函数中，可以看到编译器会针对于双引号和反引号，分别调用不同的字符串的处理逻辑：
+在扫描器中的 [next()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/syntax/scanner.go#L88) 函数中，可以看到编译器会针对于双引号和反引号，分别调用不同的字符串的处理逻辑：
 
 ```go
 func (s *scanner) next() {
@@ -92,7 +92,7 @@ func (s *scanner) next() {
 }
 ```
 
-在 [stdString()](https://github.com/golang/go/blob/960fa9bf66139e535d89934f56ae20a0e679e203/src/cmd/compile/internal/syntax/scanner.go#L674) 函数中，会循环读取后续所有字符，直至遇到下一个双引号，期间如果遇到转义字符会进行特殊处理：
+在 [stdString()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/syntax/scanner.go#L674) 函数中，会循环读取后续所有字符，直至遇到下一个双引号，期间如果遇到转义字符会进行特殊处理：
 
 ```go
 func (s *scanner) stdString() {
@@ -128,7 +128,7 @@ func (s *scanner) stdString() {
 }
 ```
 
-在 [rawString()](https://github.com/golang/go/blob/960fa9bf66139e535d89934f56ae20a0e679e203/src/cmd/compile/internal/syntax/scanner.go#L706C19-L706C30) 函数中，不会做任何额外的校验逻辑，会读取两个反引号间的所有内容，最终最终字符串的值：
+在 [rawString()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/syntax/scanner.go#L706) 函数中，不会做任何额外的校验逻辑，会读取两个反引号间的所有内容，最终最终字符串的值：
 
 ```go
 func (s *scanner) rawString() {
@@ -270,7 +270,7 @@ t := string(b)
 
 但是在确保底层数据一致的同时，还需要保障字节切片的可变性与字符串的不变性，以及不会互相影响，所以一般都会创建一个原有字节数组的副本，这会带来额外的开销。
 
-- [slicebytetostring()](https://github.com/golang/go/blob/8960925ad8dd1ef234731d94ebbea263e35a3e42/src/runtime/string.go#L81) 函数如下所示：
+- [slicebytetostring()](https://github.com/golang/go/blob/go1.22.0/src/runtime/string.go#L81) 函数如下所示：
 
     ```go
     func slicebytetostring(buf *tmpBuf, ptr *byte, n int) string {
@@ -297,7 +297,7 @@ t := string(b)
     }
     ```
 
-- [stringtoslicebyte()](https://github.com/golang/go/blob/8960925ad8dd1ef234731d94ebbea263e35a3e42/src/runtime/string.go#L166) 函数如下所示：
+- [stringtoslicebyte()](https://github.com/golang/go/blob/go1.22.0/src/runtime/string.go#L166) 函数如下所示：
 
     ```go
     func stringtoslicebyte(buf *tmpBuf, s string) []byte {
@@ -322,7 +322,7 @@ type tmpBuf [tmpStringBufSize]byte
 
 ### 零拷贝转换
 
-在某些场景下，我们将 `[]byte` 强转为 `string`，仅仅是因为类型要求，并不会涉及到可变与不可变的差异，此时编译器会做一定的优化，通过共享底层字节数据的方式来生成临时的字符串，避免额外的性能开销，在 [slicebytetostringtmp()](https://github.com/golang/go/blob/8960925ad8dd1ef234731d94ebbea263e35a3e42/src/runtime/string.go#L150) 函数中提供了实现，同时也备注了几种常见的场景：
+在某些场景下，我们将 `[]byte` 强转为 `string`，仅仅是因为类型要求，并不会涉及到可变与不可变的差异，此时编译器会做一定的优化，通过共享底层字节数据的方式来生成临时的字符串，避免额外的性能开销，在 [slicebytetostringtmp()](https://github.com/golang/go/blob/go1.22.0/src/runtime/string.go#L150) 函数中提供了实现，同时也备注了几种常见的场景：
 
 - 作为字典的 key 使用；
 - 字符串拼接；
@@ -350,7 +350,7 @@ func slicebytetostringtmp(ptr *byte, n int) string {
 
 此外，在业务场景中，当我们能够确保 `string` 与 `[]byte` 在共享底层字节数组时的安全性时，也可以手动实现如上的零拷贝方案来提升性能。
 
-Go 1.20 版本，[unsafe](https://github.com/golang/go/blob/99ee616250e865ca8eff8a91bef3824038b411f1/src/unsafe/unsafe.go#L241) 包中新增了接口用于获取 `string` 和 `slice` 底层的数据指针和构造方案：
+Go 1.20 版本，[unsafe](https://github.com/golang/go/blob/go1.22.0/src/unsafe/unsafe.go) 包中新增了接口用于获取 `string` 和 `slice` 底层的数据指针和构造方案：
 
 ```go
 func Slice(ptr *ArbitraryType, len IntegerType) []ArbitraryType
@@ -371,7 +371,7 @@ func BytesToString(b []byte) string {
 }
 ```
 
-而在 1.20 之前的版本，则需要使用反射的方案进行处理，[reflect](https://github.com/golang/go/blob/99ee616250e865ca8eff8a91bef3824038b411f1/src/reflect/value.go#L2832) 包定义了 `string` 和 `slice` 的运行时的结构：
+而在 1.20 之前的版本，则需要使用反射的方案进行处理，[reflect](https://github.com/golang/go/blob/go1.22.0/src/reflect/value.go#L2840) 包定义了 `string` 和 `slice` 的运行时的结构：
 
 ```go
 // Deprecated: Use unsafe.String or unsafe.StringData instead.
