@@ -135,6 +135,8 @@ const (
 )
 ```
 
+### [Parse()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/syntax/syntax.go#L66)
+
 [Parse()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/syntax/syntax.go#L66) 函数内部会构建一个 `parser` 对象，然后通过 [p.fileOrNil()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/syntax/parser.go#L392) 方法，循环调用 [next()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/syntax/scanner.go#L88) 方法，触发词法解析逻辑。
 
 ```go
@@ -173,6 +175,8 @@ func (s *scanner) next() {
     ...
 }
 ```
+
+### [next()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/syntax/scanner.go#L88)
 
 [next()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/syntax/scanner.go#L88) 函数内部，会先跳过一些空白符，然后针对字母或关键字进行特殊处理
 
@@ -285,7 +289,9 @@ func Parse(base *PosBase, src io.Reader, errh ErrorHandler, pragh PragmaHandler,
 }
 ```
 
-Go 会针对每个源文件生成一个独立的 AST，即 [File](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/syntax/nodes.go#L38) 结构体，所以该方法首先会解析 `_Package` 字段，匹配包名，并保存至该结构体中。
+### [fileOrNil()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/syntax/parser.go#L392)
+
+Go 会针对每个源文件生成一个独立的 AST，即 [File](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/syntax/nodes.go#L38) 结构体，所以 [fileOrNil()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/syntax/parser.go#L392) 方法首先会解析 `_Package` 字段，匹配包名，并保存至该结构体中。
 
 ```go
 type File struct {
@@ -433,6 +439,8 @@ func (p *parser) appendGroup(list []Decl, f func(*Group) Decl) []Decl {
 }
 ```
 
+### [decl](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/syntax/nodes.go#L116)
+
 针对于不同的字段，处理逻辑也会有相对应的差异，并最终得到相对应的节点的结构体，每个结构体中都嵌入了 `decl` 结构体，故均满足 `Decl` 接口：
 
 - [decl](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/syntax/nodes.go#L116)
@@ -564,6 +572,8 @@ FuncDecl struct {
     decl
 }
 ```
+
+### [stmtOrNil()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/syntax/parser.go#L2551)
 
 在 [funcDeclOrNil()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/syntax/parser.go#L773) 函数内部，会调用 [funcBody()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/syntax/parser.go#L819) 方法与 [blockStmt()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/syntax/parser.go#L2240) 方法生成函数体。
 
@@ -712,6 +722,8 @@ func Walk(fn *ir.Func) {
     ...
 }
 ```
+
+### [walkStmt()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/walk/stmt.go#L15)
 
 在 [walkStmtList()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/walk/stmt.go#L174) 会对传入的节点进行遍历处理，最终通过 [walkStmt()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/walk/stmt.go#L15) 函数内部，针对具体语句，分别执行替换逻辑。
 
@@ -862,6 +874,8 @@ func (s *state) stmtList(l ir.Nodes) {
 }
 ```
 
+### [stmt()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/ssagen/ssa.go#L1431)
+
 [stmt()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/ssagen/ssa.go#L1431) 函数负责根据节点操作符的不同，将 AST 节点转化为 SSA 形式的中间代码，例如常见的 `go`、`if`、`return`、`for` 等等。
 
 ```go
@@ -888,6 +902,8 @@ func (s *state) stmt(n ir.Node) {
     }
 }
 ```
+
+### [Compile()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/ssa/compile.go#L30)
 
 [Compile()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/ssa/compile.go#L30) 函数内部，会调用多种处理函数进行优化处理，即 [passes](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/ssa/compile.go#L457)，处理函数内部也会根据架构不同，执行相对应的策略，函数会构建出最终的 SSA 形式的中间代码。
 
