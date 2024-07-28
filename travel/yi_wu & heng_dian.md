@@ -1,6 +1,6 @@
 # 义乌 & 横店
 
-> Git 链接：<https://github.com/Chen-23333/Markdown/blob/master/Travel/luo_yang.md>
+> Git 链接：<https://github.com/Chen-23333/Markdown/blob/master/travel/luo_yang.md>
 
 ## 横店
 

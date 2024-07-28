@@ -1,6 +1,6 @@
 # 青岛
 
-> Git 链接：<https://github.com/Chen-23333/Markdown/blob/master/Travel/qing_dao.md>
+> Git 链接：<https://github.com/Chen-23333/Markdown/blob/master/travel/qing_dao.md>
 
 <br>
 <br>
