@@ -1121,3 +1121,8 @@ func f() {
     }
 }
 ```
+
+## 参考
+
+- <https://draveness.me/golang/docs/part2-foundation/ch05-keyword/golang-for-range/#%E6%95%B0%E7%BB%84%E5%92%8C%E5%88%87%E7%89%87>
+- <https://tip.golang.org/wiki/LoopvarExperiment#what-is-the-problem-this-solves>
