@@ -14,7 +14,7 @@ func Main(archInit func(*ssagen.ArchInfo)) {
 }
 ```
 
-随后会通过 [LoadPackage()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/noder/noder.go#L27) 方法，加载并解析文件，[LoadPackage()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/noder/noder.go#L27) 方法内部会调用 [syntax.Parse()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/syntax/syntax.go#L66) 方法对输入文件进行词法分析与语法分析，得到抽象语法树（AST），然后进行类型检查。
+随后会通过 [LoadPackage()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/noder/noder.go#L27) 方法，加载并解析文件，[LoadPackage()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/noder/noder.go#L27) 方法内部会调用 [syntax.Parse()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/syntax/syntax.go#L66) 方法对输入文件进行词法分析与语法分析，得到抽象语法树（AST），然后通过 [unified()](https://github.com/golang/go/blob/master/src/cmd/compile/internal/noder/unified.go#L187) 进行类型检查，并从 AST 构造出编译器所需的内部数据。
 
 ```go
 func Main(archInit func(*ssagen.ArchInfo)) {
@@ -320,7 +320,6 @@ func (p *parser) fileOrNil() *File {
     p.want(_Semi)
     ...
 }
-
 ```
 
 其中 [got()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/syntax/parser.go#L193) 方法会去调用一次词法分析，并判断是否是想要的 token 类型， [name()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/syntax/parser.go#L2700) 方法会去匹配并得到一个 `_Name` 类型的 token：
@@ -682,6 +681,79 @@ func (p *parser) stmtOrNil() Stmt {
     }
 
     return nil
+}
+```
+
+## 类型检查
+
+执行完词法分析、语法分析，得到最终的抽象语法树（AST）后，还需要执行 [unified()](https://github.com/golang/go/blob/master/src/cmd/compile/internal/noder/unified.go#L187) 函数，加载数据，对数据进行类型检查，并构造出内部节点（IR, Internal Representation）。
+
+```go
+// unified constructs the local package's Internal Representation (IR)
+// from its syntax tree (AST).
+func unified(m posMap, noders []*noder) {
+    ...
+    readBodies(target, false)
+    ...
+}
+```
+
+其中 [readBodies()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/noder/unified.go#L216) 函数会针对源文件中的函数体，进行类型检查。
+
+```go
+func readBodies(target *ir.Package, duringInlining bool) {
+    ...
+    for {
+        ...
+        pri, ok := bodyReader[fn]
+        pri.funcBody(fn)
+        ...
+    }
+    ...
+}
+```
+
+函数内部通过 `fn` 获取到对应的 `pri` 实例，并执行 [funcBody()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/noder/reader.go#L1227) 函数，函数内部会通过 [stmts()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/noder/reader.go#L1580) 函数，检查函数体中的所有语句，并返回构造完成的 `body`。
+
+```go
+func (pri pkgReaderIndex) funcBody(fn *ir.Func) {
+    r := pri.asReader(pkgbits.RelocBody, pkgbits.SyncFuncBody)
+    r.funcBody(fn)
+}
+
+// funcBody reads a function body definition from the element
+// bitstream, and populates fn with it.
+func (r *reader) funcBody(fn *ir.Func) {
+    ...
+    ir.WithFunc(fn, func() {
+        ...
+        body := r.stmts()
+        ...
+        fn.Body = body
+        ...
+    })
+    ...
+}
+```
+
+而 [stmts()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/noder/reader.go#L1580) 函数中，会继续调用 [typecheck.Stmt()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/typecheck/typecheck.go#L24)、[typecheck()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/typecheck/typecheck.go#L150) 和 [typecheck1()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/typecheck/typecheck.go#L218) 函数，执行真正的类型检查逻辑。
+
+```go
+func (r *reader) stmts() ir.Nodes {
+    ...
+    for {
+        ...
+        res.Append(typecheck.Stmt(n))
+        ...
+    }
+}
+
+func Stmt(n ir.Node) ir.Node       { return typecheck(n, ctxStmt) }
+
+func typecheck(n ir.Node, top int) (res ir.Node) {
+    ...
+    n = typecheck1(n, top)
+    ...
 }
 ```
 
