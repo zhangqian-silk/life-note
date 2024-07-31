@@ -807,13 +807,15 @@ func walkStmtList(s []ir.Node) {
 }
 ```
 
-例如对于 `OPANIC` 等语句，会额外调用 [walkExpr()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/walk/expr.go#L29) 进行处理，将 `panic` 关键字，转化为调用 `gopanic()` 函数：
+例如对于 `OAS`、`OPANIC` 等语句，会额外调用 [walkExpr()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/walk/expr.go#L29)函数和 [walkExpr1()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/walk/expr.go#L83) 函数 进行处理。对于 `OAS` 节点，会通过 [walkAssign()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/walk/assign.go#L20)  函数继续处理赋值相关逻辑，对于 `panic` 关键字，则转化为调用 `gopanic()` 函数：
 
 ```go
 func walkStmt(n ir.Node) ir.Node {
     ...
     switch n.Op() {
-    case ir.OPANIC:
+    case ir.OAS,
+            ...
+            ir.OPANIC:
         ...
         n = walkExpr(n, &init)
         ...
@@ -831,6 +833,8 @@ func walkExpr(n ir.Node, init *ir.Nodes) ir.Node {
 
 func walkExpr1(n ir.Node, init *ir.Nodes) ir.Node {
     switch n.Op() {
+    case ir.OAS, ir.OASOP:
+        return walkAssign(init, n)
     case ir.OPANIC:
         n := n.(*ir.UnaryExpr)
         return mkcall("gopanic", nil, init, n.X)
@@ -884,6 +888,29 @@ func walkRange(nrange *ir.RangeStmt) ir.Node {
     var n ir.Node = nfor
     ...
     return n
+}
+```
+
+部分关键字，例如 `make()` 函数相关操作，一般紧跟在赋值节点 `OAS` 之后，会通过 [walkAssign()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/walk/assign.go#L20)函数再调用至[walkExpr()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/walk/expr.go#L29)函数和 [walkExpr1()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/walk/expr.go#L83) 函数中进行处理，并调用至最终实现，即 [walkMakeChan()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/walk/builtin.go#L285) 函数。
+
+```go
+func walkAssign(init *ir.Nodes, n ir.Node) ir.Node {
+    ...
+    switch as.Y.Op() {
+    default:
+        as.Y = walkExpr(as.Y, init)
+    ...
+    }
+    ...
+}
+
+func walkExpr1(n ir.Node, init *ir.Nodes) ir.Node {
+    switch n.Op() {
+    case ir.OMAKECHAN:
+        n := n.(*ir.MakeExpr)
+        return walkMakeChan(n, init)
+    ...
+    }
 }
 ```
 
