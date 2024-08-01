@@ -4,6 +4,48 @@
 
 在设计上，`channel` 的读取与发送遵循了先进先出的规则，内部通过互斥锁来实现并发控制。
 
+使用时，通过 `make()` 函数进行初始化，并通过 `chan` 关键字加元素类型，共同指明 `channel` 的类型。
+
+```go
+ch := make(chan int)
+```
+
+`channel` 主要通过发送、接收两种操作来实现通信行为，且两个操作均使用 `<-` 运算符实现，通过左值、右值进行区分。接收语句也可以不接受结果，仅实现接收的行为。
+
+```go
+ch <- 1
+x := <-ch
+<-ch
+```
+
+调用 `channel` 发送和接收操作时，都有可能阻塞当前 `goroutine`，如果当前 `channel` 中的数据还未被接收，则其他发送消息的 `goroutine` 均会被阻塞，此时可以在创建时额外声明缓冲区的大小，让发送消息的操作可以继续进行。
+
+```go
+ch := make(chan int, 10)
+```
+
+另外，对于发送次数、接收次数都不确定时的场景，接收时则需要始终进行等待，此时则需要手动关闭 `channel`，避免阻塞，且接收端也需要额外的参数，判断 `channel` 是否被关闭的状态，及时结束等待行为，同时也可以使用 `range` 循环，当 `channel` 关闭且没有值后，会自动跳出循环。
+
+```go
+close(ch)
+
+for {
+    x, ok := <-ch
+    if !ok {
+        break
+    }
+}
+
+for x := range ch {}
+```
+
+大部分并发场景下，其实都是典型的生产者、消费者模型，即某些 `goroutine` 只生产数据，某些 `goroutine` 只消费数据，此时可以将 `channel` 进一步细化，用 `chan<-int` 表示只用来发送 `int` 的 `channel`，用 `<-chan int` 表示只用来接收 `int` 的 `channel`。
+
+```go
+func producer(ch chan<- int) { }
+func consumer(ch <-chan int) { }
+```
+
 ## 数据结构
 
 在运行时，`channel` 使用结构体 [hchan](https://github.com/golang/go/blob/go1.22.0/src/runtime/chan.go#L33) 来表示：
@@ -49,15 +91,6 @@ type hchan struct {
 - `lock` 为 `channel` 提供了并发控制
 
 ## 创建管道
-
-### 使用实例
-
-创建管道时，需要使用 `make` 关键字，并通过 `chan` 关键字加元素类型，共同指明 `channel` 的类型，同时 `channel` 也支持手动指定缓冲区的大小。
-
-```go
-ch1 := make(chan int)
-ch2 := make(chan int, 10)
-```
 
 ### 类型检查
 
