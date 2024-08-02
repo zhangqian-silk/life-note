@@ -1,16 +1,16 @@
 # Channel
 
-在 Go 的并发模型中，相较于使用共享内存，更推荐使用管道 `channel`，来进行通信。
+在 Go 的并发模型中，相较于使用共享内存，更推荐使用管道 channel，来进行通信。
 
-在设计上，`channel` 的读取与发送遵循了先进先出的规则，内部通过互斥锁来实现并发控制。
+在设计上，channel 的读取与发送遵循了先进先出的规则，内部通过互斥锁来实现并发控制。
 
-使用时，通过 `make()` 函数进行初始化，并通过 `chan` 关键字加元素类型，共同指明 `channel` 的类型。
+使用时，通过 `make()` 函数进行初始化，并通过 `chan` 关键字加元素类型，共同指明 channel 的类型。
 
 ```go
 ch := make(chan int)
 ```
 
-`channel` 主要通过发送、接收两种操作来实现通信行为，且两个操作均使用 `<-` 运算符实现，通过左值、右值进行区分。接收语句也可以不接受结果，仅实现接收的行为。
+channel 主要通过发送、接收两种操作来实现通信行为，且两个操作均使用 `<-` 运算符实现，通过左值、右值进行区分。接收语句也可以不接受结果，仅实现接收的行为。
 
 ```go
 ch <- 1
@@ -18,13 +18,13 @@ x := <-ch
 <-ch
 ```
 
-调用 `channel` 发送和接收操作时，都有可能阻塞当前 `goroutine`，如果当前 `channel` 中的数据还未被接收，则其他发送消息的 `goroutine` 均会被阻塞，此时可以在创建时额外声明缓冲区的大小，让发送消息的操作可以继续进行。
+调用 channel 发送和接收操作时，都有可能阻塞当前 goroutine，如果当前 channel 中的数据还未被接收，则其他发送消息的 goroutine 均会被阻塞，此时可以在创建时额外声明缓冲区的大小，让发送消息的操作可以继续进行。
 
 ```go
 ch := make(chan int, 10)
 ```
 
-另外，对于发送次数、接收次数都不确定时的场景，接收时则需要始终进行等待，此时则需要手动关闭 `channel`，避免阻塞，且接收端也需要额外的参数，判断 `channel` 是否被关闭的状态，及时结束等待行为，同时也可以使用 `range` 循环，当 `channel` 关闭且没有值后，会自动跳出循环。
+另外，对于发送次数、接收次数都不确定时的场景，接收时则需要始终进行等待，此时则需要手动关闭 channel，避免阻塞，且接收端也需要额外的参数，判断 channel 是否被关闭的状态，及时结束等待行为，同时也可以使用 `range` 循环，当 channel 关闭且没有值后，会自动跳出循环。
 
 ```go
 close(ch)
@@ -39,7 +39,7 @@ for {
 for x := range ch {}
 ```
 
-大部分并发场景下，其实都是典型的生产者、消费者模型，即某些 `goroutine` 只生产数据，某些 `goroutine` 只消费数据，此时可以将 `channel` 进一步细化，用 `chan<-int` 表示只用来发送 `int` 的 `channel`，用 `<-chan int` 表示只用来接收 `int` 的 `channel`。
+大部分并发场景下，其实都是典型的生产者、消费者模型，即某些 goroutine 只生产数据，某些 goroutine 只消费数据，此时可以将 channel 进一步细化，用 `chan<-int` 表示只用来发送 `int` 的 channel，用 `<-chan int` 表示只用来接收 `int` 的 channel。
 
 ```go
 func producer(ch chan<- int) { }
@@ -48,7 +48,7 @@ func consumer(ch <-chan int) { }
 
 ## 数据结构
 
-在运行时，`channel` 使用结构体 [hchan](https://github.com/golang/go/blob/go1.22.0/src/runtime/chan.go#L33) 来表示：
+在运行时，channel 使用结构体 [hchan](https://github.com/golang/go/blob/go1.22.0/src/runtime/chan.go#L33) 来表示：
 
 ```go
 type hchan struct {
@@ -67,9 +67,9 @@ type hchan struct {
 }
 ```
 
-- `qcount`、`dataqsiz`、`buf`、`sendx`、`recvx` 构成了一个循环队列，用于维护 `channel` 内部的缓冲区
+- `qcount`、`dataqsiz`、`buf`、`sendx`、`recvx` 构成了一个循环队列，用于维护 channel 内部的缓冲区
 
-- `elemsize` 和 `elemtype` 存储了 `channel` 所传递的元素的信息
+- `elemsize` 和 `elemtype` 存储了 channel 所传递的元素的信息
 
 - `sendq` 和 `recvq` 维护了目前被阻塞的 goroutine 列表，列表的数据结构为双向链表，[waitq](https://github.com/golang/go/blob/go1.22.0/src/runtime/chan.go#L54) 存储了链表的头尾节点，[sudog](https://github.com/golang/go/blob/master/src/runtime/runtime2.go#L356) 内部维护了 goroutine 相关信息，以及 `prev` 和 `next` 指针
 
@@ -88,7 +88,7 @@ type hchan struct {
     }
     ```
 
-- `lock` 为 `channel` 提供了并发控制
+- `lock` 为 channel 提供了并发控制
 
 ## 创建管道
 
@@ -108,7 +108,7 @@ func typecheck1(n ir.Node, top int) ir.Node {
 }
 ```
 
-- [tcMake()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/typecheck/func.go#L514) 函数首先获取第一个参数，判断当前所要创建的元素类型，并区分 `slice`、`map` 和 `channel` 执行不同的逻辑。
+- [tcMake()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/typecheck/func.go#L514) 函数首先获取第一个参数，判断当前所要创建的元素类型，并区分 `slice`、`map` 和 channel 执行不同的逻辑。
 
     ```go
     func tcMake(n *ir.CallExpr) ir.Node {
@@ -175,3 +175,348 @@ func typecheck1(n ir.Node, top int) ir.Node {
     ```
 
 ### 节点替换
+
+在节点替换阶段，[walkExpr1()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/walk/expr.go#L83) 函数和 [walkMakeChan()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/walk/builtin.go#L285) 函数会将 `OMAKECHAN` 节点，转化为真正的创建函数 [makechan64()](https://github.com/golang/go/blob/go1.22.0/src/runtime/chan.go#L64) 和 [makechan()](https://github.com/golang/go/blob/go1.22.0/src/runtime/chan.go#L64)。其中 [makechan64()](https://github.com/golang/go/blob/go1.22.0/src/runtime/chan.go#L64) 函数，但是最终也会调用至 [makechan()](https://github.com/golang/go/blob/go1.22.0/src/runtime/chan.go#L64) 函数来实现相关逻辑 。
+
+```go
+func walkExpr1(n ir.Node, init *ir.Nodes) ir.Node {
+    switch n.Op() {
+    case ir.OMAKECHAN:
+        n := n.(*ir.MakeExpr)
+        return walkMakeChan(n, init)
+    ...
+    }
+}
+
+func walkMakeChan(n *ir.MakeExpr, init *ir.Nodes) ir.Node {
+    size := n.Len
+    fnname := "makechan64"
+    argtype := types.Types[types.TINT64]
+
+    if size.Type().IsKind(types.TIDEAL) || size.Type().Size() <= types.Types[types.TUINT].Size() {
+        fnname = "makechan"
+        argtype = types.Types[types.TINT]
+    }
+
+    return mkcall1(chanfn(fnname, 1, n.Type()), n.Type(), init, reflectdata.MakeChanRType(base.Pos, n), typecheck.Conv(size, argtype))
+}
+
+func makechan64(t *chantype, size int64) *hchan {
+    if int64(int(size)) != size {
+        panic(plainError("makechan: size out of range"))
+    }
+
+    return makechan(t, int(size))
+}
+```
+
+### [makechan()](https://github.com/golang/go/blob/go1.22.0/src/runtime/chan.go#L64)
+
+- 在 [makechan()](https://github.com/golang/go/blob/go1.22.0/src/runtime/chan.go#L64) 函数内部，首先计算针对缓冲区所要分配的内存大小，并额外进行一些安全校验：
+
+    ```go
+    func makechan(t *chantype, size int) *hchan {
+        elem := t.Elem
+
+        // compiler checks this but be safe.
+        if elem.Size_ >= 1<<16 {
+            throw("makechan: invalid channel element type")
+        }
+        if hchanSize%maxAlign != 0 || elem.Align_ > maxAlign {
+            throw("makechan: bad alignment")
+        }
+
+        mem, overflow := math.MulUintptr(elem.Size_, uintptr(size))
+        if overflow || mem > maxAlloc-hchanSize || size < 0 {
+            panic(plainError("makechan: size out of range"))
+        }
+        ...
+    }
+    ```
+
+- 其次根据是否存在缓冲区、缓冲区是否存在指针两条逻辑，初始化 channel，当不涉及 GC 时，缓冲区与 channel 一起进行内存分配
+
+    ```go
+    func makechan(t *chantype, size int) *hchan {
+        ...
+        var c *hchan
+        switch {
+        case mem == 0:
+            // Queue or element size is zero.
+            c = (*hchan)(mallocgc(hchanSize, nil, true))
+            // Race detector uses this location for synchronization.
+            c.buf = c.raceaddr()
+        case elem.PtrBytes == 0:
+            // Elements do not contain pointers.
+            // Allocate hchan and buf in one call.
+            c = (*hchan)(mallocgc(hchanSize+mem, nil, true))
+            c.buf = add(unsafe.Pointer(c), hchanSize)
+        default:
+            // Elements contain pointers.
+            c = new(hchan)
+            c.buf = mallocgc(mem, elem, true)
+        }
+        ...
+    }
+    ```
+
+- 最后初始化 channel 中其他元素信息
+
+    ```go
+    func makechan(t *chantype, size int) *hchan {
+        ...
+        c.elemsize = uint16(elem.Size_)
+        c.elemtype = elem
+        c.dataqsiz = uint(size)
+        lockInit(&c.lock, lockRankHchan)
+
+        if debugChan {
+            print("makechan: chan=", c, "; elemsize=", elem.Size_, "; dataqsiz=", size, "\n")
+        }
+        return c
+    }
+    ```
+
+## 发送数据
+
+### 节点替换
+
+`Chan <- Value` 语句对应了 `OSEND` 节点，在节点替换时，[walkExpr1()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/walk/expr.go#L83) 函数和 [walkSend()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/walk/expr.go#L859) 函数会将 `OSEND` 节点，转化为调用 [chansend1()](https://github.com/golang/go/blob/go1.22.0/src/runtime/chan.go#L144) 函数，并最终调用至 [chansend()](https://github.com/golang/go/blob/go1.22.0/src/runtime/chan.go#L160) 函数。
+
+```go
+func walkExpr1(n ir.Node, init *ir.Nodes) ir.Node {
+    switch n.Op() {
+    case ir.OSEND:
+        n := n.(*ir.SendStmt)
+        return walkSend(n, init)
+    ...
+    }
+}
+
+func walkSend(n *ir.SendStmt, init *ir.Nodes) ir.Node {
+    n1 := n.Value
+    n1 = typecheck.AssignConv(n1, n.Chan.Type().Elem(), "chan send")
+    n1 = walkExpr(n1, init)
+    n1 = typecheck.NodAddr(n1)
+    return mkcall1(chanfn("chansend1", 2, n.Chan.Type()), nil, init, n.Chan, n1)
+}
+
+func chansend1(c *hchan, elem unsafe.Pointer) {
+    chansend(c, elem, true, getcallerpc())
+}
+
+func chansend(c *hchan, ep unsafe.Pointer, block bool, callerpc uintptr) bool {
+    ...
+}
+```
+
+需要注意的时，从 `Chan <- Value` 触发的消息发送，`block` 参数为 `true`，说明需要阻塞当前 goroutine。
+
+### [chansend()](https://github.com/golang/go/blob/go1.22.0/src/runtime/chan.go#L160)
+
+- 预处理
+  - 如果当前 channel 为空，且 `block` 为 `false`，则直接返回 `false`，说明调用失败
+  - 如果当前 channel 为空，且 `block` 为 `true`，则通过 `gopark` 函数，阻塞当前 goroutine
+
+    ```go
+    func chansend(c *hchan, ep unsafe.Pointer, block bool, callerpc uintptr) bool {
+        if c == nil {
+            if !block {
+                return false
+            }
+            gopark(nil, nil, waitReasonChanSendNilChan, traceBlockForever, 2)
+            throw("unreachable")
+        }
+        ...
+    }
+    ```
+
+  - 如果当前是非阻塞操作，channel 还未关闭，且缓冲区已满，则直接返回 `false`
+
+    ```go
+    func chansend(c *hchan, ep unsafe.Pointer, block bool, callerpc uintptr) bool {
+        ...
+        if !block && c.closed == 0 && full(c) {
+            return false
+        }
+        ...
+    }
+    ```
+
+  - 加锁，并检查 channel 是否已经关闭，如果是则解锁并触发 `panic`，即不能向已经关闭的 channel 中发送消息
+
+    ```go
+    func chansend(c *hchan, ep unsafe.Pointer, block bool, callerpc uintptr) bool {
+        ...
+        lock(&c.lock)
+
+        if c.closed != 0 {
+            unlock(&c.lock)
+            panic(plainError("send on closed channel"))
+        }
+        ...
+    }
+    ```
+
+- 直接向接收者发送数据
+  - 如果当前的接收者队列中，能够找到接收者，则直接发送数据
+
+    ```go
+    func chansend(c *hchan, ep unsafe.Pointer, block bool, callerpc uintptr) bool {
+        ...
+        if sg := c.recvq.dequeue(); sg != nil {
+            // Found a waiting receiver. We pass the value we want to send
+            // directly to the receiver, bypassing the channel buffer (if any).
+            send(c, sg, ep, func() { unlock(&c.lock) }, 3)
+            return true
+        }
+        ...
+    }
+    ```
+
+  - 在 [send()](https://github.com/golang/go/blob/go1.22.0/src/runtime/chan.go#L294) 函数中，如果接收者需要接收该元素，则将要发送的数据拷贝至 `Value <- Chan` 中 `Value` 对应的内存地址中
+  - 获取接收者对应的 goroutine 并解锁当前的 channel
+  - 最后标记接收成功，并通过 `goready` 函数，唤醒 goroutine
+
+    ```go
+    func send(c *hchan, sg *sudog, ep unsafe.Pointer, unlockf func(), skip int) {
+        if sg.elem != nil {
+            sendDirect(c.elemtype, sg, ep)
+            sg.elem = nil
+        }
+        gp := sg.g
+        unlockf()
+        gp.param = unsafe.Pointer(sg)
+        sg.success = true
+        ...
+        goready(gp, skip+1)
+    }
+    ```
+
+- 将数据写入缓冲区
+  - 如果当前还可以向缓冲区中添加数据，则将要发送的元素拷贝至缓冲区，并更新索引 `sendx` 和当前元素数量 `qcount`
+  - 需要注意的缓冲区是环形队列，当 `sendx` 到达最大值时，需要归零
+  - 最后解锁并返回 `true`，不会阻塞发送消息的 goroutine
+
+    ```go
+    func chansend(c *hchan, ep unsafe.Pointer, block bool, callerpc uintptr) bool {
+        ...
+        if c.qcount < c.dataqsiz {
+            // Space is available in the channel buffer. Enqueue the element to send.
+            qp := chanbuf(c, c.sendx)
+            if raceenabled {
+                racenotify(c, c.sendx, nil)
+            }
+            typedmemmove(c.elemtype, qp, ep)
+            c.sendx++
+            if c.sendx == c.dataqsiz {
+                c.sendx = 0
+            }
+            c.qcount++
+            unlock(&c.lock)
+            return true
+        }
+        ...
+    }
+    ```
+
+- 处理当前找不到发送者且缓冲区已满的情况
+  - 如果是非阻塞场景，直接结束，返回 `false`
+
+    ```go
+    func chansend(c *hchan, ep unsafe.Pointer, block bool, callerpc uintptr) bool {
+        ...
+        if !block {
+            unlock(&c.lock)
+            return false
+        }
+        ...
+    }
+    ```
+
+  - 阻塞场景时，获取当前 goroutine，并初始化发送者 `sudog` 相关信息
+
+    ```go
+    func chansend(c *hchan, ep unsafe.Pointer, block bool, callerpc uintptr) bool {
+        ...
+        gp := getg()
+        mysg := acquireSudog()
+        ...
+        mysg.elem = ep
+        mysg.waitlink = nil
+        mysg.g = gp
+        mysg.isSelect = false
+        mysg.c = c
+        ...
+    }
+    ```
+
+  - 设置当前 goroutine 所等待的 `sudog`
+  - 将当前的 `sudog` 添加至发送者的等待队列中
+  - 调用 `gopark()` 函数，阻塞当前 goroutine
+  - `KeepAlive()` 是一个特殊的函数，可以由编译器保障入参，在该行代码处之前，不会被 GC 回收，对应于当前函数，可以保障要发送的元素 `ep`，在 goroutine 挂起期间，不会被 GC 回收
+
+    ```go
+    func chansend(c *hchan, ep unsafe.Pointer, block bool, callerpc uintptr) bool {
+        ...
+        gp.waiting = mysg
+        gp.param = nil
+        c.sendq.enqueue(mysg)
+        gp.parkingOnChan.Store(true)
+        gopark(chanparkcommit, unsafe.Pointer(&c.lock), waitReasonChanSend, traceBlockChanSend, 2)
+        // Ensure the value being sent is kept alive until the
+        // receiver copies it out. The sudog has a pointer to the
+        // stack object, but sudogs aren't considered as roots of the
+        // stack tracer.
+        KeepAlive(ep)
+        ...
+    }
+    ```
+
+- 执行唤醒后的数据处理操作
+  - 修改 goroutine 被挂起时设置的标记位
+
+    ```go
+    func chansend(c *hchan, ep unsafe.Pointer, block bool, callerpc uintptr) bool {
+        ...
+        // someone woke us up.
+        if mysg != gp.waiting {
+            throw("G waiting list is corrupted")
+        }
+        gp.waiting = nil
+        gp.activeStackChans = false
+        ...
+        gp.param = nil
+        if mysg.releasetime > 0 {
+            blockevent(mysg.releasetime-t0, 2)
+        }
+        mysg.c = nil
+        releaseSudog(mysg)
+        ...
+    }
+    ```
+
+  - 判断当前发送状态，如果发送失败，则说明 channel 被关闭，则触发 `panic`，即不允许向关闭的 channel 中发送消息
+  - 如果发送成功，返回 `true`
+
+    ```go
+    func chansend(c *hchan, ep unsafe.Pointer, block bool, callerpc uintptr) bool {
+        ...
+        closed := !mysg.success
+        ...
+        if closed {
+            if c.closed == 0 {
+                throw("chansend: spurious wakeup")
+            }
+            panic(plainError("send on closed channel"))
+        }
+        return true
+    }
+    ```
+
+## 参考
+
+- <https://draveness.me/golang/docs/part3-runtime/ch06-concurrency/golang-channel/>
+- <https://juejin.cn/post/7033671944587182087>
+- <https://go101.org/article/channel-closing.html>
+- <https://www.jianshu.com/p/d24dfbb33781>
