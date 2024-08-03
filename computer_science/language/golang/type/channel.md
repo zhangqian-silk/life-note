@@ -285,6 +285,11 @@ func makechan64(t *chantype, size int64) *hchan {
 - 当前不存在等待接收数据的 goroutine，则尝试将待发送的数据添加至缓冲区中
 - 如果当前不存在等待接收数据的 goroutine 且缓冲区已满，或是没有缓冲区，则阻塞当前 goroutine，等待接收数据的函数将其唤醒
 
+除此以外，还有一些特殊场景需要注意：
+
+- 向未初始化的 channel 中发送数据时，会造成永久阻塞
+- 向已经关闭的 channel 中发送数据时，会导致 panic
+
 ### 节点替换
 
 `Chan <- Value` 语句对应了 `OSEND` 节点，在节点替换时，[walkExpr1()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/walk/expr.go#L83) 函数和 [walkSend()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/walk/expr.go#L859) 函数会将 `OSEND` 节点，转化为调用 [chansend1()](https://github.com/golang/go/blob/go1.22.0/src/runtime/chan.go#L144) 函数，并最终调用至 [chansend()](https://github.com/golang/go/blob/go1.22.0/src/runtime/chan.go#L160) 函数。
@@ -526,6 +531,17 @@ func chansend(c *hchan, ep unsafe.Pointer, block bool, callerpc uintptr) bool {
     ```
 
 ## 接收数据
+
+使用 `<- Chan` 语句接收数据时，主要分为如下三种情况：
+
+- 当前 channel 有已被阻塞的、等待发送数据的 goroutine，则直接从该 goroutine 中获取数据，并将其唤醒
+- 当前不存在等待接收数据的 goroutine，则尝试从缓冲区中获取数据
+- 如果当前不存在等待接收数据的 goroutine 且缓冲区为空，或是没有缓冲区，则阻塞当前 goroutine，等待发送数据的函数将其唤醒
+
+除此以外，还有一些特殊场景需要注意：
+
+- 从未初始化的 channel 中接收数据时，会造成永久阻塞
+- 从已经关闭的 channel 中发送数据时，会获取到零值和 `false`，表示获取失败
 
 ### 节点替换
 
