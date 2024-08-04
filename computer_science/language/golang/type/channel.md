@@ -770,6 +770,7 @@ func chanrecv(c *hchan, ep unsafe.Pointer, block bool) (selected, received bool)
     ```
 
 - 执行唤醒后的数据处理操作
+
   - 修改 goroutine 被挂起时设置的标记位
   - 返回 `(true, success)`，标记成功接收数据
 
@@ -788,6 +789,140 @@ func chanrecv(c *hchan, ep unsafe.Pointer, block bool) (selected, received bool)
         mysg.c = nil
         releaseSudog(mysg)
         return true, success
+    }
+    ```
+
+## 关闭 Channel
+
+使用 `close()` 函数关闭 channel 时，会先将 channel 标记关闭，然后唤醒所有等待发送和接收的 goroutine，由他们继续处理后续逻辑
+
+除此以外，还有一些特殊场景需要注意：
+
+- 关闭未初始化的 channel 时，会触发 panic
+- 重复关闭 channel 时，会触发 panic
+
+### 节点替换
+
+在节点替换时，[walkExpr1()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/walk/expr.go#L83) 函数和 [walkClose()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/walk/builtin.go#L154) 函数会将 `OCLOSE` 节点，转化为调用 [closechan()](https://github.com/golang/go/blob/go1.22.0/src/runtime/chan.go#L357) 函数。
+
+```go
+func walkExpr1(n ir.Node, init *ir.Nodes) ir.Node {
+    switch n.Op() {
+    case ir.OCLOSE:
+        n := n.(*ir.UnaryExpr)
+        return walkClose(n, init)
+    ...
+    }
+}
+
+func walkClose(n *ir.UnaryExpr, init *ir.Nodes) ir.Node {
+    fn := typecheck.LookupRuntime("closechan", n.X.Type())
+    return mkcall1(fn, nil, init, n.X)
+}
+
+func closechan(c *hchan) {
+    ...
+}
+```
+
+### [closechan()](https://github.com/golang/go/blob/go1.22.0/src/runtime/chan.go#L357)
+
+- 预处理
+
+  - 检查 channel 是否为空，如果是则触发 panic
+  - 加锁，并检查 channel 是否已经被关闭，如果是则触发 panic
+
+    ```go
+    func closechan(c *hchan) {
+        if c == nil {
+            panic(plainError("close of nil channel"))
+        }
+
+        lock(&c.lock)
+        if c.closed != 0 {
+            unlock(&c.lock)
+            panic(plainError("close of closed channel"))
+        }
+        ...
+    }
+    ```
+
+  - 检查无误后，标记当前 channel 被关闭
+  - 初始化存储所有等待中的 goroutine 的列表
+
+    ```go
+    func closechan(c *hchan) {
+        ...
+        c.closed = 1
+
+        var glist gList
+        ...
+    }
+    ```
+
+- 获取所有等待中的发送者和接收者
+
+  - 遍历 `recvq`，获取所有等待中的接收者，并释放用于接收数据的元素
+
+    ```go
+    func closechan(c *hchan) {
+        ...
+        // release all readers
+        for {
+            sg := c.recvq.dequeue()
+            if sg == nil {
+                break
+            }
+            if sg.elem != nil {
+                typedmemclr(c.elemtype, sg.elem)
+                sg.elem = nil
+            }
+            gp := sg.g
+            gp.param = unsafe.Pointer(sg)
+            sg.success = false
+            glist.push(gp)
+        }
+        ...
+    }
+    ```
+
+  - 遍历 `sendq`，获取所有等待中的发送者
+
+    ```go
+    func closechan(c *hchan) {
+        ...
+        // release all writers (they will panic)
+        for {
+            sg := c.sendq.dequeue()
+            if sg == nil {
+                break
+            }
+            sg.elem = nil
+            gp := sg.g
+            gp.param = unsafe.Pointer(sg)
+            sg.success = false
+            glist.push(gp)
+        }
+        ...
+    }
+    ```
+
+- 执行处理逻辑
+
+  - 解锁 channel
+  - 唤醒所有的 goroutine，由 [chansend()](https://github.com/golang/go/blob/go1.22.0/src/runtime/chan.go#L160) 函数和 [chanrecv()](https://github.com/golang/go/blob/go1.22.0/src/runtime/chan.go#L457) 函数执行后续处理逻辑
+
+    ```go
+    func closechan(c *hchan) {
+        ...
+        unlock(&c.lock)
+
+        // Ready all Gs now that we've dropped the channel lock.
+        for !glist.empty() {
+            gp := glist.pop()
+            gp.schedlink = 0
+            goready(gp, 3)
+        }
     }
     ```
 
