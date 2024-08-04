@@ -288,7 +288,7 @@ func makechan64(t *chantype, size int64) *hchan {
 除此以外，还有一些特殊场景需要注意：
 
 - 向未初始化的 channel 中发送数据时，会造成永久阻塞
-- 向已经关闭的 channel 中发送数据时，会导致 panic
+- 向已经关闭的 channel 中发送数据时，会导致 `panic`
 
 ### 节点替换
 
@@ -798,8 +798,8 @@ func chanrecv(c *hchan, ep unsafe.Pointer, block bool) (selected, received bool)
 
 除此以外，还有一些特殊场景需要注意：
 
-- 关闭未初始化的 channel 时，会触发 panic
-- 重复关闭 channel 时，会触发 panic
+- 关闭未初始化的 channel 时，会触发 `panic`
+- 重复关闭 channel 时，会触发 `panic`
 
 ### 节点替换
 
@@ -829,8 +829,8 @@ func closechan(c *hchan) {
 
 - 预处理
 
-  - 检查 channel 是否为空，如果是则触发 panic
-  - 加锁，并检查 channel 是否已经被关闭，如果是则触发 panic
+  - 检查 channel 是否为空，如果是则触发 `panic`
+  - 加锁，并检查 channel 是否已经被关闭，如果是则触发 `panic`
 
     ```go
     func closechan(c *hchan) {
@@ -925,6 +925,122 @@ func closechan(c *hchan) {
         }
     }
     ```
+
+## 如何关闭 Channel
+
+> 原文：[How to Gracefully Close Channels](https://go101.org/article/channel-closing.html)
+> 译文：[如何优雅地关闭Go channel](https://www.jianshu.com/p/d24dfbb33781)
+
+### 为什么要关闭 Channel
+
+在使用 channel 进行通信时，如果数据传递次数是明确的，则很容易明确发送数据和接收数据两个函数的调用次数，不会出现阻塞，在正常的程序执行过程中，最终 channel 会被 GC 回收。
+
+而当 channel 涉及到的发送次数和接收次数不明确时，接收者被迫需要进行循环处理，只有当接收到 channel 关闭的信号后，才可以跳出循环，继续程序的执行。
+
+### Channel 的关闭原则
+
+从上文的介绍中可以看到，在正常使用 channel 进行读、写时，还需要关注一下特殊场景：
+
+- 使用未初始化的 channel
+
+  - 向该 channel 中发送数据会导致永久阻塞
+  - 从该 channel 中接收数据会导致永久阻塞
+  - 关闭该 channel 会导致 `panic`
+
+- 使用已关闭的 channel
+
+  - 向该 channel 中发送数据会导致 `panic`
+  - 从该 channel 中接收数据是合法的，且会有额外的状态位标记 channel 已经关闭
+  - 关闭该 channel 会导致 `panic`
+
+对于未初始化的场景较好避免，而且可以通过判空的方式兜底处理，但是对于已关闭的 channel，消息的发送者并没有合适的方案去主动判断是否已经关闭，则需要一定的代码设计来保障程序的安全性。
+
+对此有一个 channel 的关闭原则，不要从接收者处关闭 channel，且存在多个发送者时，不要关闭 channel，换句话说，只有当 channel 有且仅有一个发送者时，才可以由这个发送者关闭 channel。
+
+### 为什么不提供判断 channel 状态的函数
+
+在并发场景下，channel 相较于共享内存，其优势是使用者不需要考虑加锁进行处理，但是在 channel 底层，仍然需要互斥锁来保障并发安全。针对于先使用函数判断 channel 是否关闭，再发送消息的场景，因为两步操作是非原子化的，没有办法保障发送消息时，channel 仍然未被关闭。
+
+### 遵循关闭原则的方案
+
+对于关闭原则，在理解上也比较符合直觉，当有且仅有一个发送者时，所有的数据均有该发送者产生，自然也具有关闭 channel 的主动权。
+
+而当有多个发送者时，单个发送者不再产生数据时，不应到影响其他发送者，故所有发送者均不具备关闭 channel 的主动权。此时需要额外引入一个负责传递关闭消息的的 stop channel，所有的发送者和接收者均监听该 channel 的状态，由具体的业务场景决定，应该在什么场景下关闭 stop channel。
+
+故需要针对于发送者和接收者不同的比例模型，采取不同的方案：
+
+- 1 : 1 && 1 : N：此时的比例模型比较符合关闭原则，直接由发送者进行关闭即可
+- M : N && N : 1：此时不满足比例模型，故所有的发送者不具备主动关闭的条件，需要根据具体的业务场景，由发送者或者接收者关闭一个专用的 stop channel，所有的发送者和接收者监听 stop channel 的状态来被动停止数据交互
+
+### 使用 `defer - recover` 的方案
+
+对于关闭的 channel，最危险的清空就是触发 `panic`，所以可以针对发送和关闭两个操作进行封装，使用 `recover` 进行避免：
+
+```go
+func SafeSend(ch chan T, value T) (closed bool) {
+    defer func() {
+        if recover() != nil {
+            // the return result can be altered 
+            // in a defer function call
+            closed = true
+        }
+    }()
+    
+    ch <- value // panic if ch is closed
+    return false // <=> closed = false; return
+}
+
+func SafeClose(ch chan T) (justClosed bool) {
+    defer func() {
+        if recover() != nil {
+            justClosed = false
+        }
+    }()
+    
+    // assume ch != nil here.
+    close(ch) // panic if ch is closed
+    return true
+}
+```
+
+### 使用锁的方案
+
+之所以不能提供判断 channel 是否关闭的方案，主要是因为判断函数和实际的操作函数，并非是原子操作，所以判断函数的结果不能完全作为操作的依据，此时可以额外引用锁来保障操作的原子性。
+
+```go
+type MyChannel struct {
+    C      chan T
+    closed bool
+    mutex  sync.Mutex
+}
+
+func NewMyChannel() *MyChannel {
+    return &MyChannel{C: make(chan T)}
+}
+
+func (mc *MyChannel) SafeSend(value T) {
+    mc.mutex.Lock()
+    if !mc.closed {
+        me.C <- value
+    }
+    mc.mutex.Unlock()
+}
+
+func (mc *MyChannel) SafeClose() {
+    mc.mutex.Lock()
+    if !mc.closed {
+        close(mc.C)
+        mc.closed = true
+    }
+    mc.mutex.Unlock()
+}
+
+func (mc *MyChannel) IsClosed() bool {
+    mc.mutex.Lock()
+    defer mc.mutex.Unlock()
+    return mc.closed
+}
+```
 
 ## 参考
 
