@@ -342,13 +342,135 @@ func walkSelectCases(cases []*ir.CommClause) []ir.Node {
 
 #### 语句转换
 
-```go
-func walkSelectCases(cases []*ir.CommClause) []ir.Node {
-    ...
+- 初始化
 
-    ...
-}
-```
+  - 更新计数器 `ncas`，排除 `default` 的场景，并初始化发送语句计数器 `nsends` 和发送语句计数器 `nrecvs`
+  - 初始化 Multi Op 场景下的 `init` 节点，并最终返回该节点
+  - 创建两个长度为 `ncas` 的数组，用于存储 `case` 语句和 `case` 语句在运行时的结构体，并将后者的初始化逻辑添加至 `init` 节点中
+  - 创建一个长度为 `ncas` 二倍的数组，用于后续 [selectgo()](https://github.com/golang/go/blob/go1.22.0/src/runtime/select.go#L121C6-L121C14) 函数中排序使用
+
+    ```go
+    func walkSelectCases(cases []*ir.CommClause) []ir.Node {
+        ...
+        if dflt != nil {
+            ncas--
+        }
+        casorder := make([]*ir.CommClause, ncas)
+        nsends, nrecvs := 0, 0
+
+        var init []ir.Node
+
+        // generate sel-struct
+        base.Pos = sellineno
+        selv := typecheck.TempAt(base.Pos, ir.CurFunc, types.NewArray(scasetype(), int64(ncas)))
+        init = append(init, typecheck.Stmt(ir.NewAssignStmt(base.Pos, selv, nil)))
+
+        // No initialization for order; runtime.selectgo is responsible for that.
+        order := typecheck.TempAt(base.Pos, ir.CurFunc, types.NewArray(types.Types[types.TUINT16], 2*int64(ncas)))
+        ...
+        return init
+    }
+    ```
+
+- 注册 `case` 节点
+
+  - 将 `case` 语句的初始化添加在 `init` 节点中
+  - 过滤 `default` 语句
+
+    ```go
+    func walkSelectCases(cases []*ir.CommClause) []ir.Node {
+        ...
+        // register cases
+        for _, cas := range cases {
+            ir.SetPos(cas)
+
+            init = append(init, ir.TakeInit(cas)...)
+
+            n := cas.Comm
+            if n == nil { // default:
+                continue
+            }
+            ...
+        }
+        ...
+    }
+    ```
+
+  - 根据 `OSEND` 和 `OSELRECV2` 节点，设置对应的索引 `i`，channel `c`，发送或接收的元素 `elem`，计数器 `sends` 或 `nrecvs`
+  - 其中对应于索引元素，发送语句正排，接收语句倒排
+
+    ```go
+    func walkSelectCases(cases []*ir.CommClause) []ir.Node {
+        ...
+        // register cases
+        for _, cas := range cases {
+            ...
+            var i int
+            var c, elem ir.Node
+            switch n.Op() {
+            default:
+                base.Fatalf("select %v", n.Op())
+            case ir.OSEND:
+                n := n.(*ir.SendStmt)
+                i = nsends
+                nsends++
+                c = n.Chan
+                elem = n.Value
+            case ir.OSELRECV2:
+                n := n.(*ir.AssignListStmt)
+                nrecvs++
+                i = ncas - nrecvs
+                recv := n.Rhs[0].(*ir.UnaryExpr)
+                c = recv.X
+                elem = n.Lhs[0]
+            }
+            ...
+        }
+        ...
+    }
+    ```
+
+  - 将 `case` 语句更新至 `casorder` 数组中索引所在的位置
+  - 将 channel `c` 和数据元素 `elem` 更新至 `selv` 数组中索引所在位置的 `case` 结构体中
+
+    ```go
+    func walkSelectCases(cases []*ir.CommClause) []ir.Node {
+        ...
+        // register cases
+        for _, cas := range cases {
+            ...
+            casorder[i] = cas
+
+            setField := func(f string, val ir.Node) {
+                r := ir.NewAssignStmt(base.Pos, ir.NewSelectorExpr(base.Pos, ir.ODOT, ir.NewIndexExpr(base.Pos, selv, ir.NewInt(base.Pos, int64(i))), typecheck.Lookup(f)), val)
+                init = append(init, typecheck.Stmt(r))
+            }
+
+            c = typecheck.ConvNop(c, types.Types[types.TUNSAFEPTR])
+            setField("c", c)
+            if !ir.IsBlank(elem) {
+                elem = typecheck.ConvNop(elem, types.Types[types.TUNSAFEPTR])
+                setField("elem", elem)
+            }
+            ...
+        }
+        ...
+    }
+    ```
+
+  - 校验计数器是否正确
+
+    ```go
+    func walkSelectCases(cases []*ir.CommClause) []ir.Node {
+        ...
+        if nsends+nrecvs != ncas {
+            base.Fatalf("walkSelectCases: miscount: %v + %v != %v", nsends, nrecvs, ncas)
+        }
+        ...
+    }
+    ```
+
+- 执行 [selectgo()](https://github.com/golang/go/blob/go1.22.0/src/runtime/select.go#L121C6-L121C14) 函数
 
 #### 代码示例
 
