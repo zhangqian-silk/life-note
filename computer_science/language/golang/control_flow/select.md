@@ -397,7 +397,7 @@ func walkSelectCases(cases []*ir.CommClause) []ir.Node {
     ```
 
   - 根据 `OSEND` 和 `OSELRECV2` 节点，设置对应的索引 `i`，channel `c`，发送或接收的元素 `elem`，计数器 `sends` 或 `nrecvs`
-  - 其中对应于索引元素，发送语句正排，接收语句倒排
+  - 其中对应于索引，发送语句正排，接收语句倒排
 
     ```go
     func walkSelectCases(cases []*ir.CommClause) []ir.Node {
@@ -471,6 +471,42 @@ func walkSelectCases(cases []*ir.CommClause) []ir.Node {
     ```
 
 - 执行 [selectgo()](https://github.com/golang/go/blob/go1.22.0/src/runtime/select.go#L121C6-L121C14) 函数
+
+  - 创建一条新的赋值语句，其中左值为临时变量 `chosen` 和 `recvOK`，右值为 [selectgo()](https://github.com/golang/go/blob/go1.22.0/src/runtime/select.go#L121C6-L121C14) 函数调用
+    - `chosen` 用于接收最终被选中的 case 语句的索引
+    - `recvOK` 用于表示接收操作是否成功
+    - `fnInit` 用于存储调用函数前的初始化代码，编译器会做一些优化和 debug 功能
+  - 将 `fnInit` 相关语句以及赋值语句 `r` 添加至 `select` 代码块中的 `init` 块中
+
+    ```go
+    func walkSelectCases(cases []*ir.CommClause) []ir.Node {
+        ...
+        // run the select
+        base.Pos = sellineno
+        chosen := typecheck.TempAt(base.Pos, ir.CurFunc, types.Types[types.TINT])
+        recvOK := typecheck.TempAt(base.Pos, ir.CurFunc, types.Types[types.TBOOL])
+        r := ir.NewAssignListStmt(base.Pos, ir.OAS2, nil, nil)
+        r.Lhs = []ir.Node{chosen, recvOK}
+        fn := typecheck.LookupRuntime("selectgo")
+        var fnInit ir.Nodes
+        r.Rhs = []ir.Node{mkcall1(fn, fn.Type().ResultsTuple(), &fnInit, bytePtrToIndex(selv, 0), bytePtrToIndex(order, 0), pc0, ir.NewInt(base.Pos, int64(nsends)), ir.NewInt(base.Pos, int64(nrecvs)), ir.NewBool(base.Pos, dflt == nil))}
+        init = append(init, fnInit...)
+        init = append(init, typecheck.Stmt(r))
+        ...
+    }
+    ```
+
+  - [selectgo()](https://github.com/golang/go/blob/go1.22.0/src/runtime/select.go#L121C6-L121C14) 函数内部会确认各 case 处理的优先级，以及通过循环，等待处理完成
+
+    ```go
+    // selectgo returns the index of the chosen scase, which matches the
+    // ordinal position of its respective select{recv,send,default} call.
+    // Also, if the chosen scase was a receive operation, it reports whether
+    // a value was received.
+    func selectgo(cas0 *scase, order0 *uint16, pc0 *uintptr, nsends, nrecvs int, block bool) (int, bool) {
+        ...
+    }
+    ```
 
 #### 代码示例
 
