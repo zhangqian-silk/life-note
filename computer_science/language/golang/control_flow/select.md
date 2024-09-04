@@ -345,8 +345,9 @@ func walkSelectCases(cases []*ir.CommClause) []ir.Node {
 - 初始化
 
   - 更新计数器 `ncas`，排除 `default` 的场景，并初始化发送语句计数器 `nsends` 和发送语句计数器 `nrecvs`
-  - 初始化 Multi Op 场景下的 `init` 节点，并最终返回该节点
-  - 创建两个长度为 `ncas` 的数组，用于存储 `case` 语句和 `case` 语句在运行时的结构体，并将后者的初始化逻辑添加至 `init` 节点中
+  - 初始化 Multi Op 场景下的 `init` 节点切片，并最终返回该切片
+  - 创建长度为 `ncas` 的切片 `casorder`，用于存储 `case` 语句
+  - 创建长度为 `ncas` 的数组 `selv`，用于存储 `case` 语句在运行时的结构体，并将其的初始化逻辑添加至 `init` 节点中
   - 创建一个长度为 `ncas` 二倍的数组，用于后续 [selectgo()](https://github.com/golang/go/blob/go1.22.0/src/runtime/select.go#L121C6-L121C14) 函数中排序使用
 
     ```go
@@ -470,13 +471,13 @@ func walkSelectCases(cases []*ir.CommClause) []ir.Node {
     }
     ```
 
-- 执行 [selectgo()](https://github.com/golang/go/blob/go1.22.0/src/runtime/select.go#L121C6-L121C14) 函数
+- 执行 [selectgo()](https://github.com/golang/go/blob/go1.22.0/src/runtime/select.go#L121C6-L121C14) 函数，用于确认最终选中的 case 语句
 
   - 创建一条新的赋值语句，其中左值为临时变量 `chosen` 和 `recvOK`，右值为 [selectgo()](https://github.com/golang/go/blob/go1.22.0/src/runtime/select.go#L121C6-L121C14) 函数调用
     - `chosen` 用于接收最终被选中的 case 语句的索引
     - `recvOK` 用于表示接收操作是否成功
     - `fnInit` 用于存储调用函数前的初始化代码，编译器会做一些优化和 debug 功能
-  - 将 `fnInit` 相关语句以及赋值语句 `r` 添加至 `select` 代码块中的 `init` 块中
+  - 将 `fnInit` 相关语句以及赋值语句 `r` 添加至 `init` 列表中
 
     ```go
     func walkSelectCases(cases []*ir.CommClause) []ir.Node {
@@ -508,22 +509,161 @@ func walkSelectCases(cases []*ir.CommClause) []ir.Node {
     }
     ```
 
+- 定义分发函数 `dispatch`
+
+  - 定义节点数组 `list`，用于存储 case 语句最终执行的代码块
+  - 如果 case 语句是 `OSELRECV2` 操作节点，则将其转为赋值语句，如果第二个返回值变量不为空，则将 `recvOK` 的值赋值给 `n.Lhs[1]`
+  - 将 case 语句中的 `body` 代码块都添加至 list 中
+  - 额外向 list 中添加一条 `break` 语句
+
+    ```go
+    func walkSelectCases(cases []*ir.CommClause) []ir.Node {
+        ...
+        // dispatch cases
+        dispatch := func(cond ir.Node, cas *ir.CommClause) {
+            var list ir.Nodes
+
+            if n := cas.Comm; n != nil && n.Op() == ir.OSELRECV2 {
+                n := n.(*ir.AssignListStmt)
+                if !ir.IsBlank(n.Lhs[1]) {
+                    x := ir.NewAssignStmt(base.Pos, n.Lhs[1], recvOK)
+                    list.Append(typecheck.Stmt(x))
+                }
+            }
+
+            list.Append(cas.Body.Take()...)
+            list.Append(ir.NewBranchStmt(base.Pos, ir.OBREAK, nil))
+            ...
+        }
+        ...
+    }
+    ```
+
+  - 构建最终执行的节点 `r`
+    - 如果 `cond` 代码块存在，则创建一个条件语句，满足条件时执行 `list` 代码块中逻辑
+    - 如果 `cond` 代码块不存在，则直接创建一个代码块语句，并执行 `list` 代码块中逻辑
+  - 将 `r` 添加至 `init` 列表中
+
+    ```go
+    func walkSelectCases(cases []*ir.CommClause) []ir.Node {
+        ...
+        // dispatch cases
+        dispatch := func(cond ir.Node, cas *ir.CommClause) {
+            ...
+            var r ir.Node
+            if cond != nil {
+                cond = typecheck.Expr(cond)
+                cond = typecheck.DefaultLit(cond, nil)
+                r = ir.NewIfStmt(base.Pos, cond, list, nil)
+            } else {
+                r = ir.NewBlockStmt(base.Pos, list)
+            }
+
+            init = append(init, r)
+        }
+        ...
+    }
+    ```
+
+- 通过分化函数，转化所有 case 语句与 default 语句
+
+  - 如果存在 default 语句，则进行转化，其中 `cond` 对应的逻辑为 `chosen < 0`
+
+    ```go
+    func walkSelectCases(cases []*ir.CommClause) []ir.Node {
+        ...
+        if dflt != nil {
+            ir.SetPos(dflt)
+            dispatch(ir.NewBinaryExpr(base.Pos, ir.OLT, chosen, ir.NewInt(base.Pos, 0)), dflt)
+        }
+        ...
+    }
+    ```
+
+  - 遍历转化 case 语句，其中 `cond` 对应的逻辑为 `chosen == i`
+  - 如果 i 为最后一个索引，即 `len(casorder)-1`，则不指定 `cond` 代码块
+
+    ```go
+    func walkSelectCases(cases []*ir.CommClause) []ir.Node {
+        ...
+        for i, cas := range casorder {
+            ir.SetPos(cas)
+            if i == len(casorder)-1 {
+                dispatch(nil, cas)
+                break
+            }
+            dispatch(ir.NewBinaryExpr(base.Pos, ir.OEQ, chosen, ir.NewInt(base.Pos, int64(i))), cas)
+        }
+        ...
+    }
+    ```
+
+- 返回转化结果
+
+  - 上述所有逻辑处理完成后，返回最终转化的节点列表
+
+    ```go
+    func walkSelectCases(cases []*ir.CommClause) []ir.Node {
+        ...
+        return init
+    }
+    ```
+
 #### 代码示例
 
 - 原代码：
 
     ```go
     select { 
-    case ch <- value:
-        body
+    case ch <- value1:
+        body1
+    case value2, ok <- ch2:
+        body2
+    case value3, _ <- ch3:
+        body3
+    default:
+        body4
     }
     ```
 
 - 转化后的示例代码：
 
-    ```go
+  - 其中 case 语句在 `selv` 切片中对应的索引值，发送语句正排，接收语句倒排
+  - 发送和接收操作，全部在 `selectgo()` 函数中进行处理
 
+    ```go
+    selv := [3]scase{}
+    order := [6]uint16
+    for i, cas := range cases {
+        c := scase{}
+        c.kind = ...
+        c.elem = ...
+        c.c = ...
+    }
+    chosen, revcOK := selectgo(selv, order, 3)
+    if chosen < 0 {
+        body4
+        break
+    }
+    if chosen == 0 {
+        ...
+        body1
+        break
+    }
+    if chosen == 1 {
+        ...
+        body3
+        break
+    }
+    if chosen == 2 {
+        ...
+        ok = revcOK
+        body2
+        break
+    }
     ```
+
+## 常见问题
 
 ## 参考
 
