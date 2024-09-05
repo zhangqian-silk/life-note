@@ -348,7 +348,7 @@ func walkSelectCases(cases []*ir.CommClause) []ir.Node {
   - 初始化 Multi Op 场景下的 `init` 节点切片，并最终返回该切片
   - 创建长度为 `ncas` 的切片 `casorder`，用于存储 `case` 语句
   - 创建长度为 `ncas` 的数组 `selv`，用于存储 `case` 语句在运行时的结构体，并将其的初始化逻辑添加至 `init` 节点中
-  - 创建一个长度为 `ncas` 二倍的数组，用于后续 [selectgo()](https://github.com/golang/go/blob/go1.22.0/src/runtime/select.go#L121C6-L121C14) 函数中排序使用
+  - 创建一个长度为 `ncas` 二倍的数组，用于后续 [selectgo()](https://github.com/golang/go/blob/go1.22.0/src/runtime/select.go#L121C6-L121C14) 函数中排序使用（用来存储轮询顺序和锁定顺序）
 
     ```go
     func walkSelectCases(cases []*ir.CommClause) []ir.Node {
@@ -471,9 +471,9 @@ func walkSelectCases(cases []*ir.CommClause) []ir.Node {
     }
     ```
 
-- 执行 [selectgo()](https://github.com/golang/go/blob/go1.22.0/src/runtime/select.go#L121C6-L121C14) 函数，用于确认最终选中的 case 语句
+- 执行 [selectgo()](https://github.com/golang/go/blob/go1.22.0/src/runtime/select.go#L121) 函数，用于确认最终选中的 case 语句
 
-  - 创建一条新的赋值语句，其中左值为临时变量 `chosen` 和 `recvOK`，右值为 [selectgo()](https://github.com/golang/go/blob/go1.22.0/src/runtime/select.go#L121C6-L121C14) 函数调用
+  - 创建一条新的赋值语句，其中左值为临时变量 `chosen` 和 `recvOK`，右值为 [selectgo()](https://github.com/golang/go/blob/go1.22.0/src/runtime/select.go#L121) 函数调用
     - `chosen` 用于接收最终被选中的 case 语句的索引
     - `recvOK` 用于表示接收操作是否成功
     - `fnInit` 用于存储调用函数前的初始化代码，编译器会做一些优化和 debug 功能
@@ -497,7 +497,7 @@ func walkSelectCases(cases []*ir.CommClause) []ir.Node {
     }
     ```
 
-  - [selectgo()](https://github.com/golang/go/blob/go1.22.0/src/runtime/select.go#L121C6-L121C14) 函数内部会确认各 case 处理的优先级，以及通过循环，等待处理完成
+  - [selectgo()](https://github.com/golang/go/blob/go1.22.0/src/runtime/select.go#L121) 函数内部会确认各 case 处理的优先级，以及通过循环，等待处理完成
 
     ```go
     // selectgo returns the index of the chosen scase, which matches the
@@ -660,6 +660,153 @@ func walkSelectCases(cases []*ir.CommClause) []ir.Node {
         ok = revcOK
         body2
         break
+    }
+    ```
+
+### [selectgo()](https://github.com/golang/go/blob/go1.22.0/src/runtime/select.go#L121)
+
+- 初始化
+
+  - 限制 case 的最大数量为 `1<<16`，即 65535
+  - 声明一些重要变量
+    - `ncases`：case 总数
+    - `scases`：case 的切片
+    - `pollorder`：channel 的轮询顺序
+    - `lockorder`：channel 的锁定顺序
+
+    ```go
+    func selectgo(cas0 *scase, order0 *uint16, pc0 *uintptr, nsends, nrecvs int, block bool) (int, bool) {
+        // NOTE: In order to maintain a lean stack size, the number of scases
+        // is capped at 65536.
+        cas1 := (*[1 << 16]scase)(unsafe.Pointer(cas0))
+        order1 := (*[1 << 17]uint16)(unsafe.Pointer(order0))
+
+        ncases := nsends + nrecvs
+        scases := cas1[:ncases:ncases]
+        pollorder := order1[:ncases:ncases]
+        lockorder := order1[ncases:][:ncases:ncases]
+        // NOTE: pollorder/lockorder's underlying array was not zero-initialized by compiler.
+    
+        ...
+    }
+    ```
+
+  - 随机交换 `pollorder` 中的元素，生成随机的轮询顺序
+    - 同时优化下 case 的数量，即 `norder`，排除不存在 `channel` 的 case
+    - 交换时，通过 [cheaprandn()](https://github.com/golang/go/blob/go1.22.0/src/runtime/rand.go#L222) 函数随机生成一个范围为 $[0, norder+1)$ 的整数
+
+    ```go
+    func selectgo(cas0 *scase, order0 *uint16, pc0 *uintptr, nsends, nrecvs int, block bool) (int, bool) {
+        ...
+        // generate permuted order
+        norder := 0
+        for i := range scases {
+            cas := &scases[i]
+
+            // Omit cases without channels from the poll and lock orders.
+            if cas.c == nil {
+                cas.elem = nil // allow GC
+                continue
+            }
+
+            j := cheaprandn(uint32(norder + 1))
+            pollorder[norder] = pollorder[j]
+            pollorder[j] = uint16(i)
+            norder++
+        }
+        pollorder = pollorder[:norder]
+        lockorder = lockorder[:norder]
+        ...
+    }
+    ```
+
+  - 将 `lockorder` 构建为一个最大堆
+    - 各元素间通过 `c.sortkey()`，即 channel 对应的地址进行比较
+    - 在外层循环中，每次循环结束，`lockorder` 中的前 `i` 个元素会被调整为一个极大堆
+    - 在内层循环中，每次循环会判断当前元素 `j` 的父节点，即 `(j-1)/2`，与 `i` 所对应的元素的大小，若 `j` 小于 `i`，则交换元素位置，并继续向上寻找 `j` 的父元素做比较，直至找到大于 `i` 的元素或找到堆顶元素
+      - 内层循环中，每次比较理论上应该交换 `j` 节点与其父节点的值，将 `i` 节点的值一路交换上去
+      - 但是 `j` 的父节点再下次循环中，仍然可能和下一个父节点中的值做交换，所以每次循环中仅将 `j` 的父节点的值赋给 `j` 节点，在循环结束后，再给 `j` 节点赋值正确的值，即 `i` 节点的值
+
+    ```go
+    func selectgo(cas0 *scase, order0 *uint16, pc0 *uintptr, nsends, nrecvs int, block bool) (int, bool) {
+        ...
+        // sort the cases by Hchan address to get the locking order.
+        // simple heap sort, to guarantee n log n time and constant stack footprint.
+        for i := range lockorder {
+            j := i
+            // Start with the pollorder to permute cases on the same channel.
+            c := scases[pollorder[i]].c
+            for j > 0 && scases[lockorder[(j-1)/2]].c.sortkey() < c.sortkey() {
+                k := (j - 1) / 2
+                lockorder[j] = lockorder[k]
+                j = k
+            }
+            lockorder[j] = pollorder[i]
+        }
+        ...
+    }
+    ```
+
+  - 实现堆排序，将 `lockorder` 中的元素按照 channel 的地址升序进行排列
+    > 每次循环将堆顶与堆在数组中的末尾元素交换，使得数组末端有序
+    > 再将非有序的部分重新调整结构，使其满足最大堆的形式
+    > 重复以上流程直至最终数组有序
+    - 每次先将 `i` 的值，更新为索引为 `0` 的值，即当前堆中的最大值
+    - 通过循环，将切片中 $[1, i]$ 部分的元素，在 $[0, i-1]$ 范围内重新排序为最大堆
+      - 先将 `k` 更新为 `j` 节点的左子树，如果此时 `k` 的右侧元素已经为排序后的部分，则结束循环
+      - 如果此时 `k+1` 即右子树的值更大且不属于有序的部分，则通过 `k++` 将 `k` 更新为 `j` 的右子树
+      - 如果此时 `k` 的值大于 `i` 的值，则交换 `j` 与 `k` 的值，将 `j` 更新为子节点 `k`，并继续循环
+      - 出于同样的原因，在交换 `j` 与 `k` 的值时，仅仅将 `k` 的值赋给 `j`，在最终循环结束后，将 `i` 的值赋值给 `j`，完成数据交换
+
+    ```go
+    func selectgo(cas0 *scase, order0 *uint16, pc0 *uintptr, nsends, nrecvs int, block bool) (int, bool) {
+        ...
+        for i := len(lockorder) - 1; i >= 0; i-- {
+            o := lockorder[i]
+            c := scases[o].c
+            lockorder[i] = lockorder[0]
+            j := 0
+            for {
+                k := j*2 + 1
+                if k >= i {
+                    break
+                }
+                if k+1 < i && scases[lockorder[k]].c.sortkey() < scases[lockorder[k+1]].c.sortkey() {
+                    k++
+                }
+                if c.sortkey() < scases[lockorder[k]].c.sortkey() {
+                    lockorder[j] = lockorder[k]
+                    j = k
+                    continue
+                }
+                break
+            }
+            lockorder[j] = o
+        }
+        ...
+    }
+    ```
+
+  - 通过 [sellock()](https://github.com/golang/go/blob/go1.22.0/src/runtime/select.go#L33) 函数，按照上述确定的 `lockorder` 中的顺序，对 `scases` 中的 case 语句进行加锁处理
+    - `lockorder` 按照 channel 的地址有序排列后，在加锁时可以跳过相同的实例，避免重复加锁导致死锁
+
+    ```go
+    func selectgo(cas0 *scase, order0 *uint16, pc0 *uintptr, nsends, nrecvs int, block bool) (int, bool) {
+        ...
+        // lock all the channels involved in the select
+        sellock(scases, lockorder)
+        ...
+    }
+
+    func sellock(scases []scase, lockorder []uint16) {
+        var c *hchan
+        for _, o := range lockorder {
+            c0 := scases[o].c
+            if c0 != c {
+                c = c0
+                lock(&c.lock)
+            }
+        }
     }
     ```
 
