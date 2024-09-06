@@ -26,6 +26,71 @@ default:
 }
 ```
 
+## 特性
+
+### 多路复用
+
+`select` 可用来同时监听多条 channel 的状态，并执行读写操作。
+
+如果在首次加载时，即有 `case` 语句可以执行，则会随机选择一条就行执行。如果所有 `case` 语句均处于阻塞状态，则 `select` 会阻塞当前 goroutine，直至有一条 `case` 语句率先满足执行条件，并执行。
+
+### 随机执行
+
+`select` 中的多条 `case` 语句如果同时满足条件，最终会随机执行某一条。其原因是在底层的 [selectgo()](https://github.com/golang/go/blob/go1.22.0/src/runtime/select.go#L121) 函数中，循环判断各 `case` 语句时，引入了随机数，能够避免饥饿问题。
+
+例如在循环中执行 `select` 语句时，如果第一条 `case` 语句永远可以执行，则后续所有的 `case` 语句则都无法执行。
+
+相比与 `switch` 语句，`switch` 语句更类似于对 `if-elif` 这种条件判断的简化，所以可以顺序执行，且开发者也应该明确知道这个特性。`select` 语句是用来对 channel 管道实现多路复用，本身就有并发的特性存在，故需要引入随机性来避免上述问题。
+
+### 非阻塞执行
+
+直接使用 channel 进行发送或接收时，均是阻塞操作，但是可通过缓冲区进行缓解。而对于 `select` 的场景下，可通过 `default` 语句实现非阻塞操作，在无法执行发送或接收逻辑时，执行 `default` 语句。
+
+## 常见用法
+
+### 超时判断
+
+在接收耗时操作的结果时，可同步利用 [time.After()](https://github.com/golang/go/blob/go1.22.0/src/time/sleep.go#L156) 开启一个定时器，再指定的时间后，从 [time.After()](https://github.com/golang/go/blob/go1.22.0/src/time/sleep.go#L156) 函数返回的 channel 中接收数据，执行对应的 `case` 语句，并结束 `select` 语句。
+
+```go
+select {
+case data := <-resChan:
+    ...
+case <-time.After(time.Second * 3):
+    ...
+}
+```
+
+其中 [time.After()](https://github.com/golang/go/blob/go1.22.0/src/time/sleep.go#L156) 函数会返回由 [NewTimer()](https://github.com/golang/go/blob/go1.22.0/src/time/sleep.go#L86) 函数构建的结构体 [Timer](https://github.com/golang/go/blob/go1.22.0/src/time/sleep.go#L50) 中的 channel 实例，并由 `time` 包保障在到达指定时间后，向该 channel 中发送一个 `Time` 类型的数据。
+
+```go
+// After waits for the duration to elapse and then sends the current time
+// on the returned channel.
+// It is equivalent to NewTimer(d).C.
+// The underlying Timer is not recovered by the garbage collector
+// until the timer fires. If efficiency is a concern, use NewTimer
+// instead and call Timer.Stop if the timer is no longer needed.
+func After(d Duration) <-chan Time {
+    return NewTimer(d).C
+}
+
+// NewTimer creates a new Timer that will send
+// the current time on its channel after at least duration d.
+func NewTimer(d Duration) *Timer {
+    c := make(chan Time, 1)
+    t := &Timer{
+        C: c,
+        r: runtimeTimer{
+            when: when(d),
+            f:    sendTime,
+            arg:  c,
+        },
+    }
+    startTimer(&t.r)
+    return t
+}
+```
+
 ## 数据结构
 
 对应于 `select` 中的 `case` 语句，每一个都是 `scase` 结构体，包含该条语句所引用的 channel 的结构体 `hchan`，以及发送或接收数据时所用到的元素 `elem`：
@@ -471,10 +536,10 @@ func walkSelectCases(cases []*ir.CommClause) []ir.Node {
     }
     ```
 
-- 执行 [selectgo()](https://github.com/golang/go/blob/go1.22.0/src/runtime/select.go#L121) 函数，用于确认最终选中的 case 语句
+- 执行 [selectgo()](https://github.com/golang/go/blob/go1.22.0/src/runtime/select.go#L121) 函数，用于确认最终选中的 `case` 语句
 
   - 创建一条新的赋值语句，其中左值为临时变量 `chosen` 和 `recvOK`，右值为 [selectgo()](https://github.com/golang/go/blob/go1.22.0/src/runtime/select.go#L121) 函数调用
-    - `chosen` 用于接收最终被选中的 case 语句的索引
+    - `chosen` 用于接收最终被选中的 `case` 语句的索引
     - `recvOK` 用于表示接收操作是否成功
     - `fnInit` 用于存储调用函数前的初始化代码，编译器会做一些优化和 debug 功能
   - 将 `fnInit` 相关语句以及赋值语句 `r` 添加至 `init` 列表中
@@ -497,7 +562,7 @@ func walkSelectCases(cases []*ir.CommClause) []ir.Node {
     }
     ```
 
-  - [selectgo()](https://github.com/golang/go/blob/go1.22.0/src/runtime/select.go#L121) 函数内部会确认各 case 处理的优先级，以及通过循环，等待处理完成
+  - [selectgo()](https://github.com/golang/go/blob/go1.22.0/src/runtime/select.go#L121) 函数内部会确认各 `case` 处理的优先级，以及通过循环，等待处理完成
 
     ```go
     // selectgo returns the index of the chosen scase, which matches the
@@ -511,9 +576,9 @@ func walkSelectCases(cases []*ir.CommClause) []ir.Node {
 
 - 定义分发函数 `dispatch`
 
-  - 定义节点数组 `list`，用于存储 case 语句最终执行的代码块
-  - 如果 case 语句是 `OSELRECV2` 操作节点，则将其转为赋值语句，如果第二个返回值变量不为空，则将 `recvOK` 的值赋值给 `n.Lhs[1]`
-  - 将 case 语句中的 `body` 代码块都添加至 list 中
+  - 定义节点数组 `list`，用于存储 `case` 语句最终执行的代码块
+  - 如果 `case` 语句是 `OSELRECV2` 操作节点，则将其转为赋值语句，如果第二个返回值变量不为空，则将 `recvOK` 的值赋值给 `n.Lhs[1]`
+  - 将 `case` 语句中的 `body` 代码块都添加至 list 中
   - 额外向 list 中添加一条 `break` 语句
 
     ```go
@@ -565,7 +630,7 @@ func walkSelectCases(cases []*ir.CommClause) []ir.Node {
     }
     ```
 
-- 通过分化函数，转化所有 case 语句与 default 语句
+- 通过分化函数，转化所有 `case` 语句与 default 语句
 
   - 如果存在 default 语句，则进行转化，其中 `cond` 对应的逻辑为 `chosen < 0`
 
@@ -580,7 +645,7 @@ func walkSelectCases(cases []*ir.CommClause) []ir.Node {
     }
     ```
 
-  - 遍历转化 case 语句，其中 `cond` 对应的逻辑为 `chosen == i`
+  - 遍历转化 `case` 语句，其中 `cond` 对应的逻辑为 `chosen == i`
   - 如果 i 为最后一个索引，即 `len(casorder)-1`，则不指定 `cond` 代码块
 
     ```go
@@ -628,7 +693,7 @@ func walkSelectCases(cases []*ir.CommClause) []ir.Node {
 
 - 转化后的示例代码：
 
-  - 其中 case 语句在 `selv` 切片中对应的索引值，发送语句正排，接收语句倒排
+  - 其中 `case` 语句在 `selv` 切片中对应的索引值，发送语句正排，接收语句倒排
   - 发送和接收操作，全部在 `selectgo()` 函数中进行处理
 
     ```go
@@ -667,7 +732,7 @@ func walkSelectCases(cases []*ir.CommClause) []ir.Node {
 
 - 初始化
 
-  - 限制 case 的最大数量为 `1<<16`，即 65535
+  - 限制 `case` 的最大数量为 `1<<16`，即 65535
   - 声明一些重要变量
     - `ncases`：case 总数
     - `scases`：case 的切片
@@ -692,7 +757,7 @@ func walkSelectCases(cases []*ir.CommClause) []ir.Node {
     ```
 
   - 随机交换 `pollorder` 中的元素，生成随机的轮询顺序
-    - 同时优化下 case 的数量，即 `norder`，排除不存在 `channel` 的 case
+    - 同时优化下 `case` 的数量，即 `norder`，排除不存在 `channel` 的 case
     - 交换时，通过 [cheaprandn()](https://github.com/golang/go/blob/go1.22.0/src/runtime/rand.go#L222) 函数随机生成一个范围为 $[0, norder+1)$ 的整数
 
     ```go
@@ -787,8 +852,9 @@ func walkSelectCases(cases []*ir.CommClause) []ir.Node {
     }
     ```
 
-  - 通过 [sellock()](https://github.com/golang/go/blob/go1.22.0/src/runtime/select.go#L33) 函数，按照上述确定的 `lockorder` 中的顺序，对 `scases` 中的 case 语句进行加锁处理
-    - `lockorder` 按照 channel 的地址有序排列后，在加锁时可以跳过相同的实例，避免重复加锁导致死锁
+  - 通过 [sellock()](https://github.com/golang/go/blob/go1.22.0/src/runtime/select.go#L33) 函数，按照上述确定的 `lockorder` 中的顺序，对 `scases` 中的 `case` 语句进行加锁处理
+    - [sellock()](https://github.com/golang/go/blob/go1.22.0/src/runtime/select.go#L33) 按照 channel 的地址有序排列后，在加锁时可以跳过相同的实例，避免重复加锁导致死锁
+    - 相同的 channel 实例，在第一次访问时执行加锁逻辑，避免中途被释放，后续访问异常
 
     ```go
     func selectgo(cas0 *scase, order0 *uint16, pc0 *uintptr, nsends, nrecvs int, block bool) (int, bool) {
@@ -810,8 +876,334 @@ func walkSelectCases(cases []*ir.CommClause) []ir.Node {
     }
     ```
 
-## 常见问题
+- 按照 `pollorder` 的顺序进行遍历，查找正在等待的 channel，即可以执行发送或接收语句的 channel
+
+  - 判断接收语句能否执行
+    - 发送和接收语句在数组中分别为正排和倒排，所以 `casi >= nsends` 说明为接收语句
+    - 如果 channel `c` 的发送者等待队列 `sendq` 不为空，执行 `recv` 逻辑，唤醒休眠的 goroutine 并获取数据
+    - 如果 channel `c` 中的数据量大于 0，执行 `bufrecv` 逻辑，从缓冲区中获取数据
+    - 如果 channel `c` 已经被关闭，执行 `rclose` 逻辑，从关闭的 channel 中读取数据
+
+    ```go
+    func selectgo(cas0 *scase, order0 *uint16, pc0 *uintptr, nsends, nrecvs int, block bool) (int, bool) {
+        ...
+        for _, casei := range pollorder {
+            casi = int(casei)
+            cas = &scases[casi]
+            c = cas.c
+
+            if casi >= nsends {
+                sg = c.sendq.dequeue()
+                if sg != nil {
+                    goto recv
+                }
+                if c.qcount > 0 {
+                    goto bufrecv
+                }
+                if c.closed != 0 {
+                    goto rclose
+                }
+            } else {
+                ...
+            }
+        }
+        ...
+    }
+    ```
+
+  - 判断发送语句能否执行
+    - `casi >= nsends` 不满足时，即 `casi < nsends`，说明为接收语句
+    - 如果 channel `c` 已经被关闭，执行 `sclose` 逻辑，向关闭的 channel 中发送数据
+    - 如果 channel `c` 的接收者等待队列 `recvq` 不为空，执行 `send` 逻辑，唤醒休眠的 goroutine 并发送数据
+    - 如果 channel `c` 中的缓冲区还有剩余，执行 `bufsend` 逻辑，向缓冲区中写入数据
+
+    ```go
+    func selectgo(cas0 *scase, order0 *uint16, pc0 *uintptr, nsends, nrecvs int, block bool) (int, bool) {
+        ...
+        for _, casei := range pollorder {
+            casi = int(casei)
+            cas = &scases[casi]
+            c = cas.c
+
+            if casi >= nsends {
+                ...
+            } else {
+                if c.closed != 0 {
+                    goto sclose
+                }
+                sg = c.recvq.dequeue()
+                if sg != nil {
+                    goto send
+                }
+                if c.qcount < c.dataqsiz {
+                    goto bufsend
+                }
+            }
+        }
+        ...
+    }
+    ```
+
+  - 如果是非阻塞调用，则选中 `default` 语句，即 `casi = -1`，解锁所有 channel 并执行 `retc` 逻辑，结束函数调用
+    - [selunlock()](https://github.com/golang/go/blob/go1.22.0/src/runtime/select.go#L44) 函数用于解锁所有 `case` 语句中的 channel 实例，按照 `lockorder` 的逆序进行解锁，与加锁时顺序相反
+    - 相同的 channel 实例，在最后一次访问时解锁，避免提前释放导致后续访问异常
+
+    ```go
+    func selectgo(cas0 *scase, order0 *uint16, pc0 *uintptr, nsends, nrecvs int, block bool) (int, bool) {
+        ...
+        if !block {
+            selunlock(scases, lockorder)
+            casi = -1
+            goto retc
+        }
+        ...
+    }
+
+    func selunlock(scases []scase, lockorder []uint16) {
+        for i := len(lockorder) - 1; i >= 0; i-- {
+            c := scases[lockorder[i]].c
+            if i > 0 && c == scases[lockorder[i-1]].c {
+                continue // will unlock it on the next iteration
+            }
+            unlock(&c.lock)
+        }
+    }
+    ```
+
+- 若不存在可立即执行的语句，则将 `case` 语句中的 channel 绑定在当前的 goroutine 上，并添加至对应的等待队列，等待唤醒
+
+    ```go
+    func selectgo(cas0 *scase, order0 *uint16, pc0 *uintptr, nsends, nrecvs int, block bool) (int, bool) {
+        ...
+        // pass 2 - enqueue on all chans
+        gp = getg()
+        nextp = &gp.waiting
+        for _, casei := range lockorder {
+            ... // 一些赋值语句，构建 channel 等待队列的 sudog 结构体
+            if casi < nsends {
+                c.sendq.enqueue(sg)
+            } else {
+                c.recvq.enqueue(sg)
+            }
+        }
+        ...
+    }
+    ```
+
+  - 通过 `gopark()` 函数，挂起当前 goroutine
+
+    ```go
+    func selectgo(cas0 *scase, order0 *uint16, pc0 *uintptr, nsends, nrecvs int, block bool) (int, bool) {
+        ...
+        // wait for someone to wake us up
+        gp.param = nil
+        ...
+        sellock(scases, lockorder)
+        ...
+    }
+    ```
+
+- 唤醒后，查找对应的 `sudog` 实例，并确定可执行的 `case` 语句
+  - 参数初始化
+    - `sg`：goroutine 被唤醒后所需要处理的 `sudog` 实例
+    - `casi`：最终返回的被选中的 `case` 的索引
+    - `cas`：选中的 `case` 语句
+    - `caseSuccess`：case 语句执行结果
+
+   ```go
+    func selectgo(cas0 *scase, order0 *uint16, pc0 *uintptr, nsends, nrecvs int, block bool) (int, bool) {
+        ...
+        sg = (*sudog)(gp.param)
+        gp.param = nil
+
+        // pass 3 - dequeue from unsuccessful chans
+        casi = -1
+        cas = nil
+        caseSuccess = false
+        ...
+    }
+    ```
+
+  - 按照 `lockorder` 顺序，遍历并找到被唤醒的 `sudog` 实例对应的 `case` 语句
+
+    ```go
+    func selectgo(cas0 *scase, order0 *uint16, pc0 *uintptr, nsends, nrecvs int, block bool) (int, bool) {
+        ...
+        for _, casei := range lockorder {
+            k = &scases[casei]
+            if sg == sglist {
+                // sg has already been dequeued by the G that woke us up.
+                casi = int(casei)
+                cas = k
+                caseSuccess = sglist.success
+            } else {
+                ...
+            }
+            ...
+        }
+        ...
+    }
+    ```
+
+  - 对于未选中的语句，将其从 channel 的等待者队列中移除
+
+    ```go
+    func selectgo(cas0 *scase, order0 *uint16, pc0 *uintptr, nsends, nrecvs int, block bool) (int, bool) {
+        ...
+        for _, casei := range lockorder {
+            k = &scases[casei]
+            if sg == sglist {
+                ...
+            } else {
+                c = k.c
+                if int(casei) < nsends {
+                    c.sendq.dequeueSudoG(sglist)
+                } else {
+                    c.recvq.dequeueSudoG(sglist)
+                }
+            }
+            ...
+        }
+        ...
+    }
+    ```
+
+  - 最终判断状态，并结束函数调用
+    - 如果是 send 语句，且执行失败，则执行 `sclose` 逻辑，如果是 recvice 语句，则更新结果为成功
+    - 默认逻辑下，解锁所有 channel 实例，并执行 `retc` 逻辑，结束函数调用
+
+    ```go
+    func selectgo(cas0 *scase, order0 *uint16, pc0 *uintptr, nsends, nrecvs int, block bool) (int, bool) {
+        ...
+        if casi < nsends {
+            if !caseSuccess {
+                goto sclose
+            }
+        } else {
+            recvOK = caseSuccess
+        }
+
+
+        selunlock(scases, lockorder)
+        goto retc
+        ...
+    }
+    ```
+
+- `goto` 语句对应的代码块逻辑，其中读取、发送等逻辑，与 channel 本身的代码逻辑类似
+
+  - `bufrecv`：从缓冲区中读取数据
+
+    ```go
+    func selectgo(cas0 *scase, order0 *uint16, pc0 *uintptr, nsends, nrecvs int, block bool) (int, bool) {
+        ...
+    bufrecv:
+        // can receive from buffer
+        recvOK = true
+        qp = chanbuf(c, c.recvx)
+        if cas.elem != nil {
+            typedmemmove(c.elemtype, cas.elem, qp)
+        }
+        typedmemclr(c.elemtype, qp)
+        c.recvx++
+        if c.recvx == c.dataqsiz {
+            c.recvx = 0
+        }
+        c.qcount--
+        selunlock(scases, lockorder)
+        goto retc
+        ...
+    }
+    ```
+
+  - `bufsend`：向缓冲区中发送数据
+
+    ```go
+    func selectgo(cas0 *scase, order0 *uint16, pc0 *uintptr, nsends, nrecvs int, block bool) (int, bool) {
+        ...
+    bufsend:
+        // can send to buffer
+        typedmemmove(c.elemtype, chanbuf(c, c.sendx), cas.elem)
+        c.sendx++
+        if c.sendx == c.dataqsiz {
+            c.sendx = 0
+        }
+        c.qcount++
+        selunlock(scases, lockorder)
+        goto retc
+        ...
+    }
+    ```
+
+  - `recv`：唤醒休眠的发送者，并接收数据
+
+    ```go
+    func selectgo(cas0 *scase, order0 *uint16, pc0 *uintptr, nsends, nrecvs int, block bool) (int, bool) {
+        ...
+    recv:
+        // can receive from sleeping sender (sg)
+        recv(c, sg, cas.elem, func() { selunlock(scases, lockorder) }, 2)
+        recvOK = true
+        goto retc
+        ...
+    }
+    ```
+
+  - `rclose`：从关闭的 channel 中读取数据
+
+    ```go
+    func selectgo(cas0 *scase, order0 *uint16, pc0 *uintptr, nsends, nrecvs int, block bool) (int, bool) {
+        ...
+    rclose:
+        // read at end of closed channel
+        selunlock(scases, lockorder)
+        recvOK = false
+        if cas.elem != nil {
+            typedmemclr(c.elemtype, cas.elem)
+        }
+        goto retc
+        ...
+    }
+    ```
+
+  - `send`：唤醒休眠的接收者，并发送数据
+
+    ```go
+    func selectgo(cas0 *scase, order0 *uint16, pc0 *uintptr, nsends, nrecvs int, block bool) (int, bool) {
+        ...
+    send:
+        // can send to a sleeping receiver (sg)
+        send(c, sg, cas.elem, func() { selunlock(scases, lockorder) }, 2)
+        goto retc
+        ...
+    }
+    ```
+
+  - `retc`：结束函数调用，并返回对应的值
+
+    ```go
+    func selectgo(cas0 *scase, order0 *uint16, pc0 *uintptr, nsends, nrecvs int, block bool) (int, bool) {
+        ...
+    retc:
+        return casi, recvOK
+        ...
+    }
+    ```
+
+  - `sclose`：向关闭的 channel 中发送数据，解锁所有 channel 后触发 panic
+
+    ```go
+    func selectgo(cas0 *scase, order0 *uint16, pc0 *uintptr, nsends, nrecvs int, block bool) (int, bool) {
+        ...
+    sclose:
+        // send on closed channel
+        selunlock(scases, lockorder)
+        panic(plainError("send on closed channel"))
+        ...
+    }
+    ```
 
 ## 参考
 
 - <https://draveness.me/golang/docs/part2-foundation/ch05-keyword/golang-select/>
+- <https://www.topgoer.com/%E6%B5%81%E7%A8%8B%E6%8E%A7%E5%88%B6/%E6%9D%A1%E4%BB%B6%E8%AF%AD%E5%8F%A5select.html>
