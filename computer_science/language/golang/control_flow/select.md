@@ -119,7 +119,9 @@ func NewTimer(d Duration) *Timer {
 }
 ```
 
-## 数据结构
+## 底层实现
+
+### 数据结构
 
 对应于 `select` 中的 `case` 语句，每一个都是 `scase` 结构体，包含该条语句所引用的 channel 的结构体 `hchan`，以及发送或接收数据时所用到的元素 `elem`：
 
@@ -131,7 +133,7 @@ type scase struct {
 }
 ```
 
-## 节点替换
+### 节点替换
 
 在节点替换阶段，[walkStmt()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/walk/stmt.go#L15) 函数、[walkSelect](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/walk/select.go#L15) 函数和 [walkSelectCases()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/walk/select.go#L33) 函数会对 `select` 中每个 `case` 分支进行代码逻辑优化和处理。
 
