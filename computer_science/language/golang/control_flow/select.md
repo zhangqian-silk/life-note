@@ -26,13 +26,34 @@ default:
 }
 ```
 
-## 特性
+## 特性 & 常见用法
 
 ### 多路复用
 
 `select` 可用来同时监听多条 channel 的状态，并执行读写操作。
 
 如果在首次加载时，即有 `case` 语句可以执行，则会随机选择一条就行执行。如果所有 `case` 语句均处于阻塞状态，则 `select` 会阻塞当前 goroutine，直至有一条 `case` 语句率先满足执行条件，并执行。
+
+同时也可以借助于循环语句，用于长时间不断监听所有 channel 的状态。
+
+```go
+loop:
+    for {
+        if xxx {
+            break loop
+        }
+        select {
+        case data1 := <-ch1:
+            ...
+        case data2 := <-ch2:
+            ...
+        case data3 := <-ch3:
+            ...
+        case data4 := <-ch4:
+            ...
+        }
+    }
+```
 
 ### 随机执行
 
@@ -46,7 +67,14 @@ default:
 
 直接使用 channel 进行发送或接收时，均是阻塞操作，但是可通过缓冲区进行缓解。而对于 `select` 的场景下，可通过 `default` 语句实现非阻塞操作，在无法执行发送或接收逻辑时，执行 `default` 语句。
 
-## 常见用法
+```go
+select {
+case ch <- data:
+    ...
+default:
+    ...
+}
+```
 
 ### 超时判断
 
@@ -54,7 +82,7 @@ default:
 
 ```go
 select {
-case data := <-resChan:
+case data := <-ch:
     ...
 case <-time.After(time.Second * 3):
     ...
