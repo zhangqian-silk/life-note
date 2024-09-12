@@ -2,7 +2,7 @@
 
 在 Redis 的使用中，有五种常见的类型，即 `String`、`Hash`、`List`、`Set` 和 `Zset`，后续还额外支持了四种特殊场景会使用的类型 `BitMap`、`HyperLogLog`、`GEO` 和 `Stream`。通过丰富的数据类型，支持了不同的业务特征。
 
-在底层的实现上，则分别对应了 SDS、双向链表(linked list)、压缩列表(ziplist)、哈希表(hash table)、跳表(skiplist)、整数集合(intset)、快表(quicklist)、(listpack) 这几种数据结构。通过不同数据结构的选择，为上层的数据类型的提供了较好的读写性能。
+在底层的实现上，则分别对应了 SDS(Simple Dynamic String)、双向链表(linked list)、压缩列表(ziplist)、哈希表(hash table)、跳表(skiplist)、整数集合(intset)、快表(quicklist)、(listpack) 这几种数据结构。通过不同数据结构的选择，为上层的数据类型的提供了较好的读写性能。
 
 对于具体的类型，比如 `Set`，在数据量较少时，会优先使用整数集合作为底层数据结构，数据量较大时，会使用哈希表作为底层数据结构
 
@@ -131,7 +131,51 @@ redis> object encoding list_key # 获取对象编码类型
 
 ## String
 
-`String` 类型是 Redis 中最为基础的一个基本类型，底层以 SDS(Simple Dynamic String) 的方式实现
+`String` 类型是 Redis 中最为基础的一个基本类型，业务层的所有非容器类型的数据，例如整数、浮点数、字符串、二进制数据等，在 Redis 中均是以 `String` 类型进行存储，其编码方式可以是 `int`、`embstr` 或是 `raw`，其中 `embstr` 和 `rar`，底层的数据结构为 SDS((Simple Dynamic String))。
+
+### SDS 数据结构
+
+SDS 底层的数据结构会根据实际所需大小，动态决定，以 [sdshdr8](https://github.com/redis/redis/blob/7.0.0/src/sds.h#L51) 为例：
+
+- `len`：字符串当前的长度
+- `alloc`：分配的字符串的总长度，即不包括结构体头部以及尾部的空终止符
+- `flags`：标志位
+- `buf`：存储字符串内容的字符数据
+
+```c
+struct __attribute__ ((__packed__)) sdshdr8 {
+    uint8_t len; /* used */
+    uint8_t alloc; /* excluding the header and null terminator */
+    unsigned char flags; /* 3 lsb of type, 5 unused bits */
+    char buf[];
+};
+```
+
+出于节省的目的考虑，在 [sdshdr8](https://github.com/redis/redis/blob/7.0.0/src/sds.h#L51) 中，`len` 与 `alloc` 字段的类型均为 `uint8_t`，相对应的，[sdshdr16](https://github.com/redis/redis/blob/7.0.0/src/sds.h#L57)、[sdshdr32](https://github.com/redis/redis/blob/7.0.0/src/sds.h#L63) 和 [sdshdr64](https://github.com/redis/redis/blob/7.0.0/src/sds.h#L69) 中，`len` 与 `alloc` 字段的类型分别为 `uint16_t`、`uint32_t` 和 `uint64_t`。
+
+不过在实际使用中，`String` 类型允许的最大长度，还远远不到 `uint64_t` 的范围，在 [checkStringLength()](https://github.com/redis/redis/blob/7.0.0/src/t_string.c#L40) 函数中，限制了最大的大小为 [proto_max_bulk_len](https://github.com/redis/redis/blob/7.0.0/src/config.c#L3046) 的大小，即 512MB
+
+```c
+standardConfig static_configs[] = {
+    ...
+    createLongLongConfig("proto-max-bulk-len", NULL, DEBUG_CONFIG | MODIFIABLE_CONFIG, 1024*1024, LONG_MAX, server.proto_max_bulk_len, 512ll*1024*1024, MEMORY_CONFIG, NULL, NULL), /* Bulk request max size */
+    ...
+}
+
+static int checkStringLength(client *c, long long size) {
+    if (!mustObeyClient(c) && size > server.proto_max_bulk_len) {
+        addReplyError(c,"string exceeds maximum allowed size (proto-max-bulk-len)");
+        return C_ERR;
+    }
+    return C_OK;
+}
+```
+
+### 编码方式
+
+### 常用命令
+
+### 应用场景
 
 ## 参考
 
