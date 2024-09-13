@@ -8,7 +8,7 @@
 
 针对于各项衡量指标，其主要影响因素如下所示：
 
-<table>
+<table style="width:100%; text-align:center;">
     <tr>
         <th></th>
         <th>衡量指标</th>
@@ -23,7 +23,7 @@
         <td>数据结构</td>
     </tr>
     <tr>
-        <td>序列化/反序列化开销</td>
+        <td>序列化/反序列化</td>
     </tr>
     <tr>
         <td rowspan="2">命中率</td>
@@ -324,33 +324,33 @@ Cache Aside 是最常用的一种缓存策略，其主要流程如下
     <tr>
         <th rowspan="4">缓存雪崩</th>
         <td rowspan="2">大量 key 同时过期</td>
-        <td>避免问题：打散过期时间</td>
+        <td>预防：打散过期时间</td>
     </tr>
     <tr>
-        <td>解决问题：互斥锁、永不过期、缓存降级</td>
+        <td>解决：互斥锁、永不过期、缓存降级</td>
     </tr>
     <tr>
         <td rowspan="2">缓存服务异常</td>
-        <td>避免问题：提高服务可用性</td>
+        <td>预防：提高服务可用性</td>
     </tr>
     <tr>
-        <td>解决问题：服务限流或熔断</td>
+        <td>解决：服务限流或熔断</td>
     </tr>
     <tr>
         <th rowspan="2">缓存击穿</th>
         <td rowspan="2">热点数据未命中</td>
-        <td>避免问题：预热数据</td>
+        <td>预防：预热数据</td>
     </tr>
     <tr>
-        <td>解决问题：互斥锁、永不过期、缓存降级</td>
+        <td>解决：互斥锁、永不过期、缓存降级</td>
     </tr>
     <tr>
         <th rowspan="2">缓存穿透</th>
         <td rowspan="2">存储层不存在相关数据</td>
-        <td>避免问题：布隆过滤器</td>
+        <td>预防：布隆过滤器</td>
     </tr>
     <tr>
-        <td>解决问题：缓存降级</td>
+        <td>解决：缓存降级</td>
     </tr>
 </table>
 

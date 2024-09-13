@@ -22,7 +22,7 @@ Redis 会根据用户使用的命令不同，以及真正输入的数据类型�
 
 - `type`：对象的类型，如 `String`、`Hash` 等
 - `encoding`：对象的编码方式，即底层数据结构，如 `SDS`、`hash table` 等
-- `lru`：最近访问记录
+- `lru`：最近访问记录，[LRU_BITS](https://github.com/redis/redis/blob/7.0.0/src/server.h#L838) 值为 24
   - 对于 LRU（最近最少使用） 淘汰算法来说，记录 key 最后一次的访问时间戳
   - 对于 LFU（最近最不常用） 淘汰算法来说，高 16 位记录最后访问时间，低 8 位记录访问次数
 - `refcount`：引用计数，用于 GC
@@ -45,87 +45,87 @@ typedef struct redisObject {
 <table>
     <tr>
         <th>对象类型</th>
-        <th>数据结构</th>
         <th>编码类型</th>
+        <th>数据结构</th>
     </tr>
     <tr>
         <td rowspan="3"><a href="https://github.com/redis/redis/blob/7.0.0/src/server.h#L638">OBJ_STRING</a></td>
-        <td>整数</td>
         <td><a href="https://github.com/redis/redis/blob/7.0.0/src/server.h#L826">OBJ_ENCODING_INT</a></td>
+        <td>整数</td>
     </tr>
     <tr>
-        <td>Embedded SDS</td>
         <td><a href="https://github.com/redis/redis/blob/7.0.0/src/server.h#L833">OBJ_ENCODING_EMBSTR</a></td>
+        <td>Embedded SDS</td>
     </tr>
     <tr>
-        <td>SDS</td>
         <td><a href="https://github.com/redis/redis/blob/7.0.0/src/server.h#L825">OBJ_ENCODING_RAW</a></td>
+        <td>SDS</td>
     </tr>
     <tr>
         <td rowspan="3"><a href="https://github.com/redis/redis/blob/7.0.0/src/server.h#L639">OBJ_LIST</a></td>
-        <td>压缩列表（不再使用）</td>
         <td><a href="https://github.com/redis/redis/blob/7.0.0/src/server.h#L830">OBJ_ENCODING_ZIPLIST</a></td>
+        <td>压缩列表（不再使用）</td>
     </tr>
     <tr>
-        <td>双向链表（不再使用）</td>
         <td><a href="https://github.com/redis/redis/blob/7.0.0/src/server.h#L829">OBJ_ENCODING_LINKEDLIST</a></td>
+        <td>双向链表（不再使用）</td>
     </tr>
     <tr>
-        <td>快表</td>
         <td><a href="https://github.com/redis/redis/blob/7.0.0/src/server.h#L834">OBJ_ENCODING_QUICKLIST</a></td>
+        <td>快表</td>
     </tr>
     <tr>
         <td rowspan="2"><a href="https://github.com/redis/redis/blob/7.0.0/src/server.h#L640">OBJ_SET</a></td>
-        <td>整数集合</td>
         <td><a href="https://github.com/redis/redis/blob/7.0.0/src/server.h#L831">OBJ_ENCODING_INTSET</a></td>
+        <td>整数集合</td>
     </tr>
     <tr>
-        <td>哈希表</td>
         <td><a href="https://github.com/redis/redis/blob/7.0.0/src/server.h#L827">OBJ_ENCODING_HT</a></td>
+        <td>哈希表</td>
     </tr>
     <tr>
         <td rowspan="3"><a href="https://github.com/redis/redis/blob/7.0.0/src/server.h#L641">OBJ_ZSET</a></td>
-        <td>压缩列表（不再使用）</td>
         <td><a href="https://github.com/redis/redis/blob/7.0.0/src/server.h#L830">OBJ_ENCODING_ZIPLIST</a></td>
+        <td>压缩列表（不再使用）</td>
     </tr>
     <tr>
-        <td>紧凑列表</td>
         <td><a href="https://github.com/redis/redis/blob/7.0.0/src/server.h#L836">OBJ_ENCODING_LISTPACK</a></td>
+        <td>紧凑列表</td>
     </tr>
     <tr>
-        <td>跳表</td>
         <td><a href="https://github.com/redis/redis/blob/7.0.0/src/server.h#L832">OBJ_ENCODING_SKIPLIST</a></td>
+        <td>跳表</td>
     </tr>
     <tr>
         <td rowspan="3"><a href="https://github.com/redis/redis/blob/7.0.0/src/server.h#L642">OBJ_HASH</a></td>
-        <td>压缩列表（不再使用）</td>
         <td><a href="https://github.com/redis/redis/blob/7.0.0/src/server.h#L830">OBJ_ENCODING_ZIPLIST</a></td>
+        <td>压缩列表（不再使用）</td>
     </tr>
     <tr>
-        <td>紧凑列表</td>
         <td><a href="https://github.com/redis/redis/blob/7.0.0/src/server.h#L836">OBJ_ENCODING_LISTPACK</a></td>
+        <td>紧凑列表</td>
     </tr>
     <tr>
-        <td>哈希表</td>
         <td><a href="https://github.com/redis/redis/blob/7.0.0/src/server.h#L827">OBJ_ENCODING_HT</a></td>
+        <td>哈希表</td>
     </tr>
     <tr>
         <td><a href="https://github.com/redis/redis/blob/7.0.0/src/server.h#L656">OBJ_STREAM</a></td>
-        <td>基数树</td>
         <td><a href="https://github.com/redis/redis/blob/7.0.0/src/server.h#L835">OBJ_ENCODING_STREAM</a></td>
+        <td>基数树</td>
     </tr>
 </table>
 
 ### 常用命令
 
 ```shell
-redis> rpush list_key 1 2 3 4 5 # 创建列表对象
+> rpush list_key 1 2 3 4 5 # 创建列表对象
 (integer) 5
 
-redis> type list_key # 获取对象类型
+> type list_key # 获取对象类型
 "list"
 
-redis> object encoding list_key # 获取对象编码类型
+> object encoding list_key # 获取对象编码类型
 "listpack"
 ```
 
@@ -171,11 +171,194 @@ static int checkStringLength(client *c, long long size) {
 }
 ```
 
+相较于 C 语言原生字符串，SDS 主要由如下几个优势：
+
+- 读取长度时，直接读取结构体的属性 `len`，时间复杂度为 O(1)
+- 读取数据时，根据 `len` 来判断当前所要读取的长度，而非空白符，所以可以存储包含空白符的数据，即可以存储所有二进制数据
+- 写入数据时，可以根据 `len` 和 `alloc` 两个关键字判断空间是否足够，不够的话还可以修改底层缓冲区数据，动态扩容
+
 ### 编码方式
+
+- `int`：当存储的 value 是整数，且可以用 `long` 类型进行表示时，此时会直接将 [redisObject](https://github.com/redis/redis/blob/7.0.0/src/server.h#L845) 中的 `ptr`，从 `void *` 类型转为 `long` 类型，用于存储 value。
+
+  - `void *` 与 `long` 占用的字节数始终相同，在 32 位机器为 $4$ 字节，在 64 位机器为 $8$ 字节
+
+  - 此时结构体如下所示：
+
+    <table style="width:100%; text-align:center;">
+        <tr>
+            <th colspan="3">redisObject</th>
+        </tr>
+        <tr>
+            <td>type</td>
+            <td>encoding</td>
+            <td>ptr</td>
+        </tr>
+        <tr>
+            <td>string</td>
+            <td>int</td>
+            <th>value</th>
+        </tr>
+    </table>
+
+- `embstr`：当存储的 value 是字符串，且字符长度小于 [OBJ_ENCODING_EMBSTR_SIZE_LIMIT](https://github.com/redis/redis/blob/7.0.0/src/object.c#L119) 时，会采用 `embstr` 编码，针对 [redisObject](https://github.com/redis/redis/blob/7.0.0/src/server.h#L845) 与 [sdshdr8](https://github.com/redis/redis/blob/7.0.0/src/sds.h#L51) 仅进行一次内存分配，提高性能。
+
+  - 在实际使用中，value 为大整数、浮点数、二进制数据等情况，均为被统一转为字符串来存储
+
+  - 在 7.0 版本中，[OBJ_ENCODING_EMBSTR_SIZE_LIMIT](https://github.com/redis/redis/blob/7.0.0/src/object.c#L119) 的值为 44
+  - 在 [createStringObject()](https://github.com/redis/redis/blob/7.0.0/src/object.c#L120) 函数中，会实现上述决策逻辑
+
+    ```c
+    #define OBJ_ENCODING_EMBSTR_SIZE_LIMIT 44
+    robj *createStringObject(const char *ptr, size_t len) {
+        if (len <= OBJ_ENCODING_EMBSTR_SIZE_LIMIT)
+            return createEmbeddedStringObject(ptr,len);
+        else
+            return createRawStringObject(ptr,len);
+    }
+    ```
+
+- `raw`：在其他情况下，均会使用 `raw` 编码类型，先分配 [redisObject](https://github.com/redis/redis/blob/7.0.0/src/server.h#L845) 的内存，再分配 [sdshdr8](https://github.com/redis/redis/blob/7.0.0/src/sds.h#L51) 的内存
+  - 对于 `embstr` 来说，创建与释放均仅需要调用一次函数，且内存连续可以更好的利用 CPU 缓存，
+  - 字符串长度在增长时，有可能会触发扩容逻辑，重新进行内存分配，有可能会不满足 `int` 和 `embstr` 的条件，出于简单考虑，规定 `int` 和 `embstr` 编码方式仅支持读，触发写逻辑时会将其转为 `raw` 编码类型再进行修改
+
+- `size_limit`
+
+  - 对于 [redisObject](https://github.com/redis/redis/blob/7.0.0/src/server.h#L845) 来说，在 64 位系统下，共占用 $16$ 字节
+
+    <table style="width:100%; text-align:center;">
+        <tr>
+            <th></th>
+            <th colspan="5">redisObject</th>
+        </tr>
+        <tr>
+            <th>field</th>
+            <td>type</td>
+            <td>encoding</td>
+            <td>lru</td>
+            <td>refcount</td>
+            <td>ptr</td>
+        </tr>
+        <tr>
+            <th>type</th>
+            <td>4 bit</td>
+            <td>4 bit</td>
+            <td>24 bit</td>
+            <td>int</td>
+            <td>void *</td>
+        </tr>
+        <tr>
+            <th>byte</th>
+            <td>0.5</td>
+            <td>0.5</td>
+            <td>3</td>
+            <td>4</td>
+            <td>8</td>
+        </tr>
+    </table>
+
+  - 而对于 [sdshdr8](https://github.com/redis/redis/blob/7.0.0/src/sds.h#L51) 来说，在不考虑 `buf` 字段的前提下，共占用 $3$ 字节，此时假定 value 的长度为 $n$，则 buf 的长度为 value 加上空白符的长度即 $n + 1$ 字节
+
+    <table style="width:100%; text-align:center;">
+        <tr>
+            <th></th>
+            <th colspan="4">sdshdr8</th>
+        </tr>
+        <tr>
+            <th>field</th>
+            <td>len</td>
+            <td>alloc</td>
+            <td>flag</td>
+            <td>buf</td>
+        </tr>
+        <tr>
+            <th>type</th>
+            <td>uint8_t</td>
+            <td>uint8_t</td>
+            <td>unsigned char</td>
+            <td>char [ ]</td>
+        </tr>
+        <tr>
+            <th>byte</th>
+            <td>1</td>
+            <td>1</td>
+            <td>1</td>
+            <td>n+1</td>
+        </tr>
+    </table>
+
+  - 从内存分配和内存对齐的角度来说，64 位系统下，一次分配的内存为 $16$ 字节的倍数，且是 $2$ 的整数次幂，即 $16$ 字节、$32$ 字节、$64$ 字节，等等
+  - 上述两个结构体占用的字节数为 $20 + n$，故较为合适的分配方式，是直接分配 $64$ 字节（$32$ 字节太小），此时 $n$ 的最大值即为 $64-20=44$
 
 ### 常用命令
 
+- 基础操作：
+
+    ```shell
+    > set int_key 100 # 设置整数，key 值重复时会直接覆盖
+    "OK"
+
+    > get int_key # 获取 value，对于整数来说，最终返回的也是字符串类型
+    "100"
+
+    > append int_key _append # 附加新字符串，对于整数，会将其转为 raw 类型再修改
+    (integer) 10             # 返回修改后的字符串长度
+
+    > get int_key
+    "100_append"
+
+    > exists int_key # 判断 key 是否存在
+    (integer) 1
+
+    > strlen int_key # 获取字符串长度
+    (integer) 10
+
+    > DEL int_key # 删除
+    (integer) 1
+    ```
+
+- range 操作
+
+    ```shell
+    > set string_key string_value # 设置字符串
+    "OK"
+
+    > setrange string_key 12 _edit # 从指定位置开始修改字符串
+    (integer) 17
+
+    > get string_key
+    "string_value_edit"
+
+    > setrange string_key 20 _out_of_range # 越界时，会自动扩容，并填充空白符 \x00
+    (integer) 33
+
+    > get string_key
+    "string_value_edit\x00\x00\x00_out_of_range"
+
+    > getrange string_key 0 11 # 获取指定索引内的数据
+    "string_value"
+    ```
+
+- 批量操作
+
+    ```shell
+    > mset key1 value1 key2 value2 # 批量设置
+    "OK"
+
+    > mget key1 key2 # 批量读取
+    1) "value1"
+    2) "value2"
+    ```
+
+- 计数器
+
+- 过期时间
+
+- 不存在时插入
+
 ### 应用场景
+
+## 通用命令
 
 ## 参考
 
