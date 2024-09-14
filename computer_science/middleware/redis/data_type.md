@@ -40,6 +40,8 @@ typedef struct redisObject {
 } robj;
 ```
 
+<br>
+
 对象类型与编码类型的对应关系，如下所示，在目前的版本中(7.0)，压缩列表(ziplist)被紧凑列表(listpack)取代了，列表对象底层也改为使用快表(quicklist)来实现。
 
 <table>
@@ -131,7 +133,9 @@ typedef struct redisObject {
 
 ## String
 
-`String` 类型是 Redis 中最为基础的一个基本类型，业务层的所有非容器类型的数据，例如整数、浮点数、字符串、二进制数据等，在 Redis 中均是以 `String` 类型进行存储，其编码方式可以是 `int`、`embstr` 或是 `raw`，其中 `embstr` 和 `rar`，底层的数据结构为 SDS((Simple Dynamic String))。
+`String` 类型是 Redis 中最为基础的一个基本类型，业务层的所有非容器类型的数据，例如整数、浮点数、字符串、二进制数据等，在 Redis 中均是以 `String` 类型进行存储。
+
+其编码方式可以是 `int`、`embstr` 或是 `raw`，其中 `embstr` 和 `rar`，底层的数据结构为 SDS(Simple Dynamic String)。
 
 ### SDS 数据结构
 
@@ -150,6 +154,8 @@ struct __attribute__ ((__packed__)) sdshdr8 {
     char buf[];
 };
 ```
+
+<br>
 
 出于节省的目的考虑，在 [sdshdr8](https://github.com/redis/redis/blob/7.0.0/src/sds.h#L51) 中，`len` 与 `alloc` 字段的类型均为 `uint8_t`，相对应的，[sdshdr16](https://github.com/redis/redis/blob/7.0.0/src/sds.h#L57)、[sdshdr32](https://github.com/redis/redis/blob/7.0.0/src/sds.h#L63) 和 [sdshdr64](https://github.com/redis/redis/blob/7.0.0/src/sds.h#L69) 中，`len` 与 `alloc` 字段的类型分别为 `uint16_t`、`uint32_t` 和 `uint64_t`。
 
@@ -170,6 +176,8 @@ static int checkStringLength(client *c, long long size) {
     return C_OK;
 }
 ```
+
+<br>
 
 相较于 C 语言原生字符串，SDS 主要由如下几个优势：
 
@@ -201,6 +209,8 @@ static int checkStringLength(client *c, long long size) {
         </tr>
     </table>
 
+<br>
+
 - `embstr`：当存储的 value 是字符串，且字符长度小于 [OBJ_ENCODING_EMBSTR_SIZE_LIMIT](https://github.com/redis/redis/blob/7.0.0/src/object.c#L119) 时，会采用 `embstr` 编码，针对 [redisObject](https://github.com/redis/redis/blob/7.0.0/src/server.h#L845) 与 [sdshdr8](https://github.com/redis/redis/blob/7.0.0/src/sds.h#L51) 仅进行一次内存分配，提高性能。
 
   - 在实际使用中，value 为大整数、浮点数、二进制数据等情况，均为被统一转为字符串来存储
@@ -218,9 +228,13 @@ static int checkStringLength(client *c, long long size) {
     }
     ```
 
+<br>
+
 - `raw`：在其他情况下，均会使用 `raw` 编码类型，先分配 [redisObject](https://github.com/redis/redis/blob/7.0.0/src/server.h#L845) 的内存，再分配 [sdshdr8](https://github.com/redis/redis/blob/7.0.0/src/sds.h#L51) 的内存
   - 对于 `embstr` 来说，创建与释放均仅需要调用一次函数，且内存连续可以更好的利用 CPU 缓存，
   - 字符串长度在增长时，有可能会触发扩容逻辑，重新进行内存分配，有可能会不满足 `int` 和 `embstr` 的条件，出于简单考虑，规定 `int` 和 `embstr` 编码方式仅支持读，触发写逻辑时会将其转为 `raw` 编码类型再进行修改
+
+<br>
 
 - `size_limit`
 
@@ -317,6 +331,8 @@ static int checkStringLength(client *c, long long size) {
     (integer) 1
     ```
 
+<br>
+
 - range 操作
 
     ```shell
@@ -339,6 +355,8 @@ static int checkStringLength(client *c, long long size) {
     "string_value"
     ```
 
+<br>
+
 - 批量操作
 
     ```shell
@@ -350,13 +368,116 @@ static int checkStringLength(client *c, long long size) {
     2) "value2"
     ```
 
+<br>
+
 - 计数器
+
+    ```shell
+    > set int_key 100
+    "OK"
+
+    > incr int_key # 将整数类型的值加一，并返回整数结果
+    (integer) 101
+
+    > incrby int_key 20 # 将整数类型的值加任意值，并返回整数结果
+    (integer) 121
+
+    > decr int_key # 将整数类型的值减一，并返回整数结果
+    (integer) 120
+
+    > decrby int_key 20 # 将整数类型的值减任意值，并返回整数结果
+    (integer) 100
+    ```
+
+<br>
 
 - 过期时间
 
+    ```shell
+    > set expire_key value ex 3600 # 设置键值对时，设置过期时间
+    "OK"
+
+    > setex expire_key2 3600 value # 设置键值对时，设置过期时间
+    "OK"
+
+    > expire expire_key 600 # 更新过期时间（要求 key 已存在）
+    (integer) 1
+
+    > ttl expire_key # 查看过期时间
+    (integer) 593
+
+    > ttl expire_key2 # 查看过期时间
+    (integer) 3571
+    ```
+
+<br>
+
 - 不存在时插入
 
+    ```shell
+    > setnx nx_key value # 不存在时插入，结果为 1 代表插入成功
+    (integer) 1
+
+    > setnx nx_key value # 不存在时插入，结果为 0 代表已经存在
+    (integer) 0
+
+    > set nx_key2 value nx # 不存在时插入，"OK" 代表插入成功，可结合其他关键字使用，比如过期时间
+    "OK"
+
+    > set nx_key2 value nx # 不存在时插入，nil 代表已经存在
+    (nil)   
+    ```
+
 ### 应用场景
+
+- 分布式存储：在分布式架构下，某些临时数据需要维护在服务器内存，而不需要持久化存储时，可以通过 Redis 实现数据共享
+
+<br>
+
+- 缓存对象：常使用对象标识加主键一起作为 key 值
+
+  - 缓存 json 字符串，由业务层处理序列化/反序列化逻辑
+
+    ```shell
+    > set user:1 '{"name":"silk", "age":18}'
+    "OK"
+    ```
+
+  - 分属性进行缓存，避免了序列化开销，但是需要进行数据组装
+
+    ```shell
+    > mset user:1:name silk user:1:age 18
+    "OK"
+    ```
+
+<br>
+
+- 计数器：Redis 本身在处理命令时是单线程操作，不存在并发问题，所以适合于计数场景，比如页面 PV、点赞次数等
+
+<br>
+
+- 分布式锁：
+  - 通过 `nx` 命令，可以实现加锁操作，插入成功代表加锁成功
+
+    ```shell
+    setnx lock_key unique_value
+    ```
+
+  - 通过设置过期时间，可以实现超时控制
+
+    ```shell
+    set lock_key unique_value nx ex 10
+    ```
+
+  - 通过删除 key 值，可以实现解锁操作，但是必须通过 lua 脚本，判断加锁、解锁来自同一个实例，然后再删除 key 值，确保操作的原子性
+
+    ```lua
+    if redis.call("get",KEYS[1]) == ARGV[1] then
+        return redis.call("del",KEYS[1])
+    else
+        return 0
+    end
+    ```
 
 ## 通用命令
 
