@@ -85,6 +85,8 @@ func updatePoint[T any](fieldPtr *T, newValuePtr T) {
 }
 ```
 
+<br>
+
 但是对于栈中的对象来说，改动较为频繁，引入插入写屏障，性能开销较大，一般不会引入插入写屏障。此时，则需要额外针对于栈中对象启动 STW，重新进行扫描。
 
 ### 删除写屏障
@@ -99,6 +101,8 @@ func updatePoint[T any](fieldPtr *T, newValuePtr T) {
     *fieldPtr = newValuePtr
 }
 ```
+
+<br>
 
 这种写屏障方案可以保证 GC 开始时的所有对象，在 GC 期间全部都会被扫描到，故也被称作快照垃圾回收（Snapshot GC）。但是对于在 GC 期间新创建的对象，可能会被遗漏标记。
 

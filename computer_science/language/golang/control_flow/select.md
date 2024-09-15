@@ -11,6 +11,8 @@ case <-time.After(time.Second * 1):
 }
 ```
 
+<br>
+
 `select` 本身的执行会阻塞当前 goroutine，直至某一个 `case` 满足条件并执行成功。
 
 但是 `select` 支持 `default` 语句，如果此时所有 `case` 均不满足条件，无法完成写入或是读取操作，则会直接执行 `default` 的逻辑，从而避免阻塞。利用这一点，也可以实现非阻塞的写入或读取。
@@ -89,6 +91,8 @@ case <-time.After(time.Second * 3):
 }
 ```
 
+<br>
+
 其中 [time.After()](https://github.com/golang/go/blob/go1.22.0/src/time/sleep.go#L156) 函数会返回由 [NewTimer()](https://github.com/golang/go/blob/go1.22.0/src/time/sleep.go#L86) 函数构建的结构体 [Timer](https://github.com/golang/go/blob/go1.22.0/src/time/sleep.go#L50) 中的 channel 实例，并由 `time` 包保障在到达指定时间后，向该 channel 中发送一个 `Time` 类型的数据。
 
 ```go
@@ -158,6 +162,8 @@ func walkSelectCases(cases []*ir.CommClause) []ir.Node {
     ...
 }
 ```
+
+<br>
 
 [walkSelectCases()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/walk/select.go#L33) 函数内部，根据 `case` 数量区分了 4 种场景，分别进行优化处理：
 
@@ -246,6 +252,8 @@ func walkSelectCases(cases []*ir.CommClause) []ir.Node {
 }
 ```
 
+<br>
+
 此外，还针对接收数据的语句做了额外处理，如果接收语句的两个返回元素均为空标识符，则直接将 n 同样设置为空标识符，否则设置为接收两个值的赋值操作：
 
 ```go
@@ -314,6 +322,8 @@ func walkSelectCases(cases []*ir.CommClause) []ir.Node {
     ...
 }
 ```
+
+<br>
 
 对于新构建的 `if` 语句来说：
 
@@ -468,6 +478,8 @@ func walkSelectCases(cases []*ir.CommClause) []ir.Node {
     }
     ```
 
+<br>
+
 - 注册 `case` 节点
 
   - 将 `case` 语句的初始化添加在 `init` 节点中
@@ -566,6 +578,8 @@ func walkSelectCases(cases []*ir.CommClause) []ir.Node {
     }
     ```
 
+<br>
+
 - 执行 [selectgo()](https://github.com/golang/go/blob/go1.22.0/src/runtime/select.go#L121) 函数，用于确认最终选中的 `case` 语句
 
   - 创建一条新的赋值语句，其中左值为临时变量 `chosen` 和 `recvOK`，右值为 [selectgo()](https://github.com/golang/go/blob/go1.22.0/src/runtime/select.go#L121) 函数调用
@@ -603,6 +617,8 @@ func walkSelectCases(cases []*ir.CommClause) []ir.Node {
         ...
     }
     ```
+
+<br>
 
 - 定义分发函数 `dispatch`
 
@@ -660,6 +676,8 @@ func walkSelectCases(cases []*ir.CommClause) []ir.Node {
     }
     ```
 
+<br>
+
 - 通过分化函数，转化所有 `case` 语句与 default 语句
 
   - 如果存在 default 语句，则进行转化，其中 `cond` 对应的逻辑为 `chosen < 0`
@@ -693,6 +711,8 @@ func walkSelectCases(cases []*ir.CommClause) []ir.Node {
     }
     ```
 
+<br>
+
 - 返回转化结果
 
   - 上述所有逻辑处理完成后，返回最终转化的节点列表
@@ -722,9 +742,6 @@ func walkSelectCases(cases []*ir.CommClause) []ir.Node {
     ```
 
 - 转化后的示例代码：
-
-  - 其中 `case` 语句在 `selv` 切片中对应的索引值，发送语句正排，接收语句倒排
-  - 发送和接收操作，全部在 `selectgo()` 函数中进行处理
 
     ```go
     selv := [3]scase{}
@@ -757,6 +774,11 @@ func walkSelectCases(cases []*ir.CommClause) []ir.Node {
         break
     }
     ```
+
+对于转化后的代码：
+
+- `case` 语句在 `selv` 切片中对应的索引值，发送语句正排，接收语句倒排
+- 发送和接收操作，全部在 `selectgo()` 函数中进行处理
 
 ### [selectgo()](https://github.com/golang/go/blob/go1.22.0/src/runtime/select.go#L121)
 
@@ -906,6 +928,8 @@ func walkSelectCases(cases []*ir.CommClause) []ir.Node {
     }
     ```
 
+<br>
+
 - 按照 `pollorder` 的顺序进行遍历，查找正在等待的 channel，即可以执行发送或接收语句的 channel
 
   - 判断接收语句能否执行
@@ -1000,6 +1024,8 @@ func walkSelectCases(cases []*ir.CommClause) []ir.Node {
     }
     ```
 
+<br>
+
 - 若不存在可立即执行的语句，则将 `case` 语句中的 channel 绑定在当前的 goroutine 上，并添加至对应的等待队列，等待唤醒
 
     ```go
@@ -1032,6 +1058,8 @@ func walkSelectCases(cases []*ir.CommClause) []ir.Node {
         ...
     }
     ```
+
+<br>
 
 - 唤醒后，查找对应的 `sudog` 实例，并确定可执行的 `case` 语句
   - 参数初始化
@@ -1119,6 +1147,8 @@ func walkSelectCases(cases []*ir.CommClause) []ir.Node {
         ...
     }
     ```
+
+<br>
 
 - `goto` 语句对应的代码块逻辑，其中读取、发送等逻辑，与 channel 本身的代码逻辑类似
 

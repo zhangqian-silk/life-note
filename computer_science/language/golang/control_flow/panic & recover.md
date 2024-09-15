@@ -74,6 +74,10 @@ func walkExpr(n ir.Node, init *ir.Nodes) ir.Node {
 }
 ```
 
+<br>
+
+在运行时：
+
 - `panic` 语句会转化为 [gopanic()](https://github.com/golang/go/blob/go1.22.0/src/runtime/panic.go#L720) 函数的调用
 
     ```go
@@ -110,6 +114,7 @@ func walkExpr(n ir.Node, init *ir.Nodes) ir.Node {
 核心处理逻辑如下所示：
 
 - 判断传入参数并进行兜底赋值
+  - 默认逻辑为 `PanicNilError`
 
     ```go
     func gopanic(e any) {
@@ -123,6 +128,8 @@ func walkExpr(n ir.Node, init *ir.Nodes) ir.Node {
         ...
     }
     ```
+
+<br>
 
 - 判断当前 goroutine 的一些状态，这部分特殊场景会直接结束程序
 
@@ -190,6 +197,8 @@ func walkExpr(n ir.Node, init *ir.Nodes) ir.Node {
     }
     ```
 
+<br>
+
 - 正常链路下，函数主体逻辑
 
   - 创建新的 [_panic](https://github.com/golang/go/blob/go1.22.0/src/runtime/runtime2.go#L1047) 结构体，并将计数器 `runningPanicDefers` 加一
@@ -226,6 +235,7 @@ func walkExpr(n ir.Node, init *ir.Nodes) ir.Node {
 核心处理逻辑如下所示：
 
 - 预处理
+
   - 判断触发的 `panic` 与 goroutine 中绑定的 `panic` 实例是否一致
   - 判断 `recovered` 属性，如果在执行 `defer` 语句时曾触发过 `recover()` 函数，则改为调用 [recovery()](https://github.com/golang/go/blob/go1.22.0/src/runtime/panic.go#L1063) 函数，执行恢复逻辑
 
@@ -268,6 +278,8 @@ func walkExpr(n ir.Node, init *ir.Nodes) ir.Node {
         }
     }
     ```
+
+<br>
 
 - 获取 `defer` 语句所应执行的函数
 

@@ -4,25 +4,25 @@
 
 - 切片：
 
-```go
-slice := []int{1, 2, 3, 4, 5}
-for index, value := range slice {
-    fmt.Printf("索引: %d, 值: %d\n", index, value)
-}
-```
+    ```go
+    slice := []int{1, 2, 3, 4, 5}
+    for index, value := range slice {
+        fmt.Printf("索引: %d, 值: %d\n", index, value)
+    }
+    ```
 
 - 哈希表：
 
-```go
-myMap := map[string]int{
-    "a": 10,
-    "b": 20,
-    "c": 30,
-}
-for key, value := range myMap {
-    fmt.Printf("键: %s, 值: %d\n", key, value)
-}
-```
+    ```go
+    myMap := map[string]int{
+        "a": 10,
+        "b": 20,
+        "c": 30,
+    }
+    for key, value := range myMap {
+        fmt.Printf("键: %s, 值: %d\n", key, value)
+    }
+    ```
 
 ## For 循环
 
@@ -44,6 +44,8 @@ type ForStmt struct {
     DistinctVars bool
 }
 ```
+
+<br>
 
 在生成 SSA 代码时，即 [stmt()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/ssagen/ssa.go#L1431) 方法中，会真正构建 `for` 循环的执行逻辑：
 
@@ -71,6 +73,8 @@ type ForStmt struct {
         }
     }
     ```
+
+<br>
 
 - 构建 `Cond` 代码块，并从当前的结束代码块跳转至 `Cond` 代码块
   - 如果 `Cond` 代码块存在，则根据其结果为 `true` 还是 `false`，分别跳转至 `Body` 和 `End` 代码块
@@ -101,6 +105,8 @@ type ForStmt struct {
     }
     ```
 
+<br>
+
 - 设置 `continue` 和 `break` 的目标块，并处理标签相关逻辑
   - 当触发 `continue` 语句时，跳转至 `Incr` 代码块，开始下一次循环
   - 当触发 `break` 语句时，跳转至 `End` 代码块，结束当前循环
@@ -129,6 +135,8 @@ type ForStmt struct {
     }
     ```
 
+<br>
+
 - 构建 `Body` 代码块，处理循环体内部逻辑
   - 上述设置的 `continue` 和 `break` 的目标代码块，将针对 `Body` 代码块中的逻辑生效
 
@@ -146,6 +154,8 @@ type ForStmt struct {
         }
     }
     ```
+
+<br>
 
 - 恢复 `continue` 和 `break` 的目标代码块
   - `Body` 代码块相关的逻辑已经构建结束，需要恢复原本的设置，例如循环嵌套的场景
@@ -168,6 +178,8 @@ type ForStmt struct {
         }
     }
     ```
+
+<br>
 
 - 构建 `Incr` 代码块
   - 设置 `Body` 代码块（如果存在）跳转至 `Incr` 代码块
@@ -203,6 +215,8 @@ type ForStmt struct {
     }
     ```
 
+<br>
+
 - 构建 `End` 代码块，需要注意的是 `End` 代码块仅能通过以下两种方式跳转
   - 通过 `Cond` 代码块在 `false` 的分支下跳转
   - 通过 `Body` 代码块在 `break` 语句下跳转
@@ -237,6 +251,8 @@ func walkRange(nrange *ir.RangeStmt) ir.Node {
 }
 ```
 
+<br>
+
 对于 `ForStmt` 所需的 `Init`、`Cond`、`Post`、`Body`、`Label` 代码块，会在这里从 `RangeStmt` 语句中进行转化处理：
 
 ```go
@@ -260,6 +276,8 @@ func walkRange(nrange *ir.RangeStmt) ir.Node {
     ...
 }
 ```
+
+<br>
 
 其中根据 `RangeStme` 中遍历的元素的类型不同，会对 `Init`、`Cond` 和 `Post` 做不同的处理，还会根据 `v1` 和 `v2` 的取值不同，构造不同的 `Body` 语句：
 
@@ -301,6 +319,8 @@ for v1 := range a {
 }
 ```
 
+<br>
+
 在经过编译器处理后，会转化为如下伪代码：
 
 ```go
@@ -336,25 +356,29 @@ for hv1, hn := 0, a; hv1 < hn; hv1 += 1 {
     }
     ```
 
+<br>
+
 - 更新 `for` 循环的 `Cond` 和 `Post` 代码块
 
   - 设置 `Cond` 代码块为二元表达式 `hv1 < hn`
   - 设置 `Post` 代码块为赋值表达式 `hv1 = hv1 + 1`
 
-```go
-func walkRange(nrange *ir.RangeStmt) ir.Node {
-    ...
-    switch k := t.Kind(); {
-    case types.IsInt[k]:
+    ```go
+    func walkRange(nrange *ir.RangeStmt) ir.Node {
         ...
-        nfor.Cond = ir.NewBinaryExpr(base.Pos, ir.OLT, hv1, hn)
-        nfor.Post = ir.NewAssignStmt(base.Pos, hv1, ir.NewBinaryExpr(base.Pos, ir.OADD, hv1, ir.NewInt(base.Pos, 1)))
+        switch k := t.Kind(); {
+        case types.IsInt[k]:
+            ...
+            nfor.Cond = ir.NewBinaryExpr(base.Pos, ir.OLT, hv1, hn)
+            nfor.Post = ir.NewAssignStmt(base.Pos, hv1, ir.NewBinaryExpr(base.Pos, ir.OADD, hv1, ir.NewInt(base.Pos, 1)))
+            ...
         ...
-    ...
+        }
+        ...
     }
-    ...
-}
-```
+    ```
+
+<br>
 
 - 更新 `for` 循环的 `Body` 代码块
 
@@ -474,6 +498,8 @@ for hv1, hn := 0, len(ha); hv1 < hn; hv1 += 1 {
     }
     ```
 
+<br>
+
 - 初始化临时变量
 
   - 初始化迭代对象 `ha`，即数组/切片 `a` 本身，避免后续 `a` 发生了更改
@@ -501,6 +527,8 @@ for hv1, hn := 0, len(ha); hv1 < hn; hv1 += 1 {
     }
     ```
 
+<br>
+
 - 更新 `for` 循环的 `Cond` 和 `Post` 代码块
 
   - 设置 `Cond` 代码块为二元表达式 `hv1 < hn`
@@ -520,6 +548,8 @@ for hv1, hn := 0, len(ha); hv1 < hn; hv1 += 1 {
         ...
     }
     ```
+
+<br>
 
 - 更新 `for` 循环的 `Body` 代码块
 
@@ -667,6 +697,8 @@ for mapiterinit(ha.type, ha, hit); hit.key != nil; mapiternext(&hit) {
     }
     ```
 
+<br>
+
 - 初始化临时变量
 
   - 初始化迭代对象 `ha`，是对于原哈希表的引用
@@ -708,7 +740,10 @@ for mapiterinit(ha.type, ha, hit); hit.key != nil; mapiternext(&hit) {
     }
     ```
 
+<br>
+
 - 更新 `for` 循环的 `Init` 代码块
+
   - 创建 [mapiterinit()](https://github.com/golang/go/blob/go1.22.0/src/runtime/map.go#L816C43-L816C48) 函数的调用语句，并将其添加至 `Init` 代码块中
   - [mapiterinit()](https://github.com/golang/go/blob/go1.22.0/src/runtime/map.go#L816C43-L816C48) 语句内部会初始化迭代器中的字段，例如哈希表的类型，哈希表本身，等等
   - 在初始化时，会通过随机数来确认本次迭代开始的位置
@@ -745,6 +780,8 @@ for mapiterinit(ha.type, ha, hit); hit.key != nil; mapiternext(&hit) {
     }
     ```
 
+<br>
+
 - 更新 `for` 循环的 `Cond` 和 `Post` 代码块
 
   - 设置 `Cond` 代码块为二元表达式 `hit.key != nil`，即还存在未遍历的 key 值
@@ -766,6 +803,8 @@ for mapiterinit(ha.type, ha, hit); hit.key != nil; mapiternext(&hit) {
         ...
     }
     ```
+
+<br>
 
 - 更新 `for` 循环的 `Body` 代码块
 
@@ -853,6 +892,8 @@ for hv1, hb = <-ha; hb != false; hv1, hb = <-ha {
     }
     ```
 
+<br>
+
 - 更新 `for` 循环的 `Cond` 代码块
 
   - 设置 `Cond` 代码块为二元表达式 `hb != false`，即接收通道成功
@@ -877,6 +918,8 @@ for hv1, hb = <-ha; hb != false; hv1, hb = <-ha {
         ...
     }
     ```
+
+<br>
 
 - 更新 `for` 循环的 `Body` 代码块
 
@@ -1021,6 +1064,8 @@ func Print123() {
 }
 ```
 
+<br>
+
 在 1.22 以前的版本中，上述程序最终会输出 `"4,4,4"`，其原因是变量 `i` 仅在 `for` 循环的 `Init` 代码块中进行声明，在 `Post` 代码块中自增时，仅仅修改了 `i` 的值，使其自增，但是每次循环中变量 `i` 的地址其实没有发生变化。
 
 相当于 `prints` 切片中的所有函数，所捕获的均是同一个变量 `i`，且在循环结束后，`i` 最终的值为 `4`。
@@ -1039,6 +1084,8 @@ func Print123ForSlice() {
     }
 }
 ```
+
+<br>
 
 上述函数的执行结果为 `"3,3,3"`，其原因也是变量 `v` 仅在 `for` 循环的 `Init` 代码块中进行声明，后续每次循环中重新对其赋值，所以添加在 `newArr` 中的三个元素，都是同一个地址。
 
@@ -1070,6 +1117,8 @@ func Print123ForSlice() {
     }
 }
 ```
+
+<br>
 
 在 1.22 及以后的版本，编译器内部修改了这个赋值逻辑，即 [distinctVars()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/noder/writer.go#L1481) 方法默认会为每次循环，都独立创建不同的实例，同时也可以标记位来修改这个执行逻辑
 

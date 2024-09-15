@@ -14,6 +14,8 @@ func Main(archInit func(*ssagen.ArchInfo)) {
 }
 ```
 
+<br>
+
 随后会通过 [LoadPackage()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/noder/noder.go#L27) 方法，加载并解析文件，[LoadPackage()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/noder/noder.go#L27) 方法内部会调用 [syntax.Parse()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/syntax/syntax.go#L66) 方法对输入文件进行词法分析与语法分析，得到抽象语法树（AST），然后通过 [unified()](https://github.com/golang/go/blob/master/src/cmd/compile/internal/noder/unified.go#L187) 进行类型检查，并从 AST 构造出编译器所需的内部数据。
 
 ```go
@@ -41,6 +43,8 @@ func LoadPackage(filenames []string) {
     unified(m, noders)
 }
 ```
+
+<br>
 
 之后初始化编译器的后端程序，即 [ssagen.InitConfig()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/ssagen/ssa.go#L71)，然后会先执行 [enqueueFunc()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/gc/compile.go#L30) 函数，对要编译的目标函数做一些处理，例如替换函数的具体实现，并将目标函数添加至队列中。
 
@@ -80,6 +84,8 @@ func enqueueFunc(fn *ir.Func) {
     compilequeue = append(compilequeue, fn)
 }
 ```
+
+<br>
 
 在 [compileFunctions()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/gc/compile.go#L115) 函数中，会编译所有函数，将其转化为 SSA 形式的中间代码。
 
@@ -162,6 +168,8 @@ func (p *parser) fileOrNil() *File {
 }
 ```
 
+<br>
+
 [parser](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/syntax/parser.go#L18) 结构体内部嵌套了 [scaner](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/syntax/scanner.go#L30) 结构体，故 [next()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/syntax/scanner.go#L88) 函数真正的执行逻辑，是由 [scaner](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/syntax/scanner.go#L30) 负责
 
 ```go
@@ -204,6 +212,8 @@ redo:
 }
 ```
 
+<br>
+
 最后是识别字面量、操作符与分隔符对应的特殊符号，枚举进行处理。
 
 ```go
@@ -236,6 +246,8 @@ redo:
     ...
 }
 ```
+
+<br>
 
 以最常见的标准字符串，即 [stdString](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/syntax/scanner.go#L674) 为例，会循环读取后续所有字符，直至遇到下一个双引号：
 
@@ -322,6 +334,8 @@ func (p *parser) fileOrNil() *File {
 }
 ```
 
+<br>
+
 其中 [got()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/syntax/parser.go#L193) 方法会去调用一次词法分析，并判断是否是想要的 token 类型， [name()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/syntax/parser.go#L2700) 方法会去匹配并得到一个 `_Name` 类型的 token：
 
 ```go
@@ -342,6 +356,8 @@ func (p *parser) name() *Name {
     ...
 }
 ```
+
+<br>
 
 紧接着会循环解析所有 `_Import` 字段，并确保 `import` 声明全部在 `package` 声明之后，在其他字段之前，[importDecl()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/syntax/parser.go#L539) 会用来处理 `_Import` 类型：
 
@@ -367,6 +383,8 @@ func (p *parser) fileOrNil() *File {
     ...
 }
 ```
+
+<br>
 
 在之后，会继续处理其他顶层声明，即常量、类型、变量和函数，相对应的，他们也都有各自的处理函数：
 
@@ -402,6 +420,8 @@ func (p *parser) fileOrNil() *File {
 }
 
 ```
+
+<br>
 
 在匹配到对应的字段后，均会通过 [appendGroup()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/syntax/parser.go#L518) 方法，执行对应的处理逻辑，得到该节点对应的结构体，满足 [Decl](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/syntax/nodes.go#L51) 接口，并将其添加至 AST 文件的 `DeclList` 中：
 
@@ -444,133 +464,143 @@ func (p *parser) appendGroup(list []Decl, f func(*Group) Decl) []Decl {
 
 - [decl](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/syntax/nodes.go#L116)
 
-```go
-type decl struct{ node }
+    ```go
+    type decl struct{ node }
 
-func (*decl) aDecl() {}
+    func (*decl) aDecl() {}
 
-type node struct {
-    pos Pos
-}
+    type node struct {
+        pos Pos
+    }
 
-func (n *node) Pos() Pos       { return n.pos }
-func (n *node) SetPos(pos Pos) { n.pos = pos }
-func (*node) aNode()           {}
-```
+    func (n *node) Pos() Pos       { return n.pos }
+    func (n *node) SetPos(pos Pos) { n.pos = pos }
+    func (*node) aNode()           {}
+    ```
+
+<br>
 
 - [importDecl()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/syntax/parser.go#L539) : [ImportDecl](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/syntax/nodes.go#L58)
 
-```go
-// ImportSpec = [ "." | PackageName ] ImportPath .
-// ImportPath = string_lit .
-func (p *parser) importDecl(group *Group) Decl {
-    d := new(ImportDecl)
-    ...
-}
+    ```go
+    // ImportSpec = [ "." | PackageName ] ImportPath .
+    // ImportPath = string_lit .
+    func (p *parser) importDecl(group *Group) Decl {
+        d := new(ImportDecl)
+        ...
+    }
 
-//              Path
-// LocalPkgName Path
-type ImportDecl struct {
-    Group        *Group // nil means not part of a group
-    Pragma       Pragma
-    LocalPkgName *Name     // including "."; nil means no rename present
-    Path         *BasicLit // Path.Bad || Path.Kind == StringLit; nil means no path
-    decl
-}
-```
+    //              Path
+    // LocalPkgName Path
+    type ImportDecl struct {
+        Group        *Group // nil means not part of a group
+        Pragma       Pragma
+        LocalPkgName *Name     // including "."; nil means no rename present
+        Path         *BasicLit // Path.Bad || Path.Kind == StringLit; nil means no path
+        decl
+    }
+    ```
+
+<br>
 
 - [constDecl()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/syntax/parser.go#L572) : [ConstDecl](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/syntax/nodes.go#L69)
 
-```go
-// ConstSpec = IdentifierList [ [ Type ] "=" ExpressionList ] .
-func (p *parser) constDecl(group *Group) Decl {
-    d := new(ConstDecl)
-    ...
-}
+    ```go
+    // ConstSpec = IdentifierList [ [ Type ] "=" ExpressionList ] .
+    func (p *parser) constDecl(group *Group) Decl {
+        d := new(ConstDecl)
+        ...
+    }
 
-// NameList
-// NameList      = Values
-// NameList Type = Values
-type ConstDecl struct {
-    Group    *Group // nil means not part of a group
-    Pragma   Pragma
-    NameList []*Name
-    Type     Expr // nil means no type
-    Values   Expr // nil means no values
-    decl
-}
-```
+    // NameList
+    // NameList      = Values
+    // NameList Type = Values
+    type ConstDecl struct {
+        Group    *Group // nil means not part of a group
+        Pragma   Pragma
+        NameList []*Name
+        Type     Expr // nil means no type
+        Values   Expr // nil means no values
+        decl
+    }
+    ```
+
+<br>
 
 - [typeDecl()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/syntax/parser.go#L594) : [typeDecl](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/syntax/nodes.go#L79)
 
-```go
-// TypeSpec = identifier [ TypeParams ] [ "=" ] Type .
-func (p *parser) typeDecl(group *Group) Decl {
-    d := new(TypeDecl)
-    ...
-}
+    ```go
+    // TypeSpec = identifier [ TypeParams ] [ "=" ] Type .
+    func (p *parser) typeDecl(group *Group) Decl {
+        d := new(TypeDecl)
+        ...
+    }
 
-// Name Type
-type TypeDecl struct {
-    Group      *Group // nil means not part of a group
-    Pragma     Pragma
-    Name       *Name
-    TParamList []*Field // nil means no type parameters
-    Alias      bool
-    Type       Expr
-    decl
-}
-```
+    // Name Type
+    type TypeDecl struct {
+        Group      *Group // nil means not part of a group
+        Pragma     Pragma
+        Name       *Name
+        TParamList []*Field // nil means no type parameters
+        Alias      bool
+        Type       Expr
+        decl
+    }
+    ```
+
+<br>
 
 - [varDecl()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/syntax/parser.go#L745) : [VarDecl](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/syntax/nodes.go#L92)
 
-```go
-// VarSpec = IdentifierList ( Type [ "=" ExpressionList ] | "=" ExpressionList ) .
-func (p *parser) varDecl(group *Group) Decl {
-    d := new(VarDecl)
-    ...
-}
+    ```go
+    // VarSpec = IdentifierList ( Type [ "=" ExpressionList ] | "=" ExpressionList ) .
+    func (p *parser) varDecl(group *Group) Decl {
+        d := new(VarDecl)
+        ...
+    }
 
-// NameList Type
-// NameList Type = Values
-// NameList      = Values
-type VarDecl struct {
-    Group    *Group // nil means not part of a group
-    Pragma   Pragma
-    NameList []*Name
-    Type     Expr // nil means no type
-    Values   Expr // nil means no values
-    decl
-}
-```
+    // NameList Type
+    // NameList Type = Values
+    // NameList      = Values
+    type VarDecl struct {
+        Group    *Group // nil means not part of a group
+        Pragma   Pragma
+        NameList []*Name
+        Type     Expr // nil means no type
+        Values   Expr // nil means no values
+        decl
+    }
+    ```
+
+<br>
 
 - [funcDeclOrNil()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/syntax/parser.go#L773) : [funcDecl](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/syntax/nodes.go#L105)
 
-```go
-// FunctionDecl = "func" FunctionName [ TypeParams ] ( Function | Signature ) .
-// FunctionName = identifier .
-// Function     = Signature FunctionBody .
-// MethodDecl   = "func" Receiver MethodName ( Function | Signature ) .
-// Receiver     = Parameters .
-func (p *parser) funcDeclOrNil() *FuncDecl {
-    f := new(FuncDecl)
-    ...
-}
+    ```go
+    // FunctionDecl = "func" FunctionName [ TypeParams ] ( Function | Signature ) .
+    // FunctionName = identifier .
+    // Function     = Signature FunctionBody .
+    // MethodDecl   = "func" Receiver MethodName ( Function | Signature ) .
+    // Receiver     = Parameters .
+    func (p *parser) funcDeclOrNil() *FuncDecl {
+        f := new(FuncDecl)
+        ...
+    }
 
-// func          Name Type { Body }
-// func          Name Type
-// func Receiver Name Type { Body }
-// func Receiver Name Type
-FuncDecl struct {
-    Pragma     Pragma
-    Recv       *Field // nil means regular function
-    Name       *Name
-    TParamList []*Field // nil means no type parameters
-    Type       *FuncType
-    Body       *BlockStmt // nil means no body (forward declaration)
-    decl
-}
-```
+    // func          Name Type { Body }
+    // func          Name Type
+    // func Receiver Name Type { Body }
+    // func Receiver Name Type
+    FuncDecl struct {
+        Pragma     Pragma
+        Recv       *Field // nil means regular function
+        Name       *Name
+        TParamList []*Field // nil means no type parameters
+        Type       *FuncType
+        Body       *BlockStmt // nil means no body (forward declaration)
+        decl
+    }
+    ```
 
 ### [stmtOrNil()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/syntax/parser.go#L2551)
 
@@ -602,6 +632,8 @@ func (p *parser) blockStmt(context string) *BlockStmt {
 }
 ```
 
+<br>
+
 我们日常所编写的代码逻辑，例如函数调用，局部变量声明，逻辑判断与循环等等， 其实绝大部分都是在各个函数体中，并非是 AST 的顶级声明。
 
 在构建函数体，亦即构建 block 声明时，会调用 [stmtList()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/syntax/parser.go#L2654) 方法和 [stmtOrNil()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/syntax/parser.go#L2551) 方法来进行处理。
@@ -628,6 +660,8 @@ func (p *parser) stmtOrNil() Stmt {
 }
 ```
 
+<br>
+
 在具体判断时，因为大部分语句都是 `_Name` 类型的 token，例如函数调用，变量赋值等，所以先对该类型进行判断并处理。
 
 ```go
@@ -647,6 +681,8 @@ func (p *parser) stmtOrNil() Stmt {
 }
 ```
 
+<br>
+
 在之后对 `_Var`、`_Const` 和 `_Type` 三种顶级声明进行处理，需要注意的时，此时他们的作用域并非全局，而是在 block 内部。
 
 ```go
@@ -665,6 +701,8 @@ func (p *parser) stmtOrNil() Stmt {
     ...
 }
 ```
+
+<br>
 
 最后是对其他关键字进行处理，例如 `_For`、`_Go`、`_Defer` 等。
 
@@ -698,6 +736,8 @@ func unified(m posMap, noders []*noder) {
 }
 ```
 
+<br>
+
 其中 [readBodies()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/noder/unified.go#L216) 函数会针对源文件中的函数体，进行类型检查。
 
 ```go
@@ -712,6 +752,8 @@ func readBodies(target *ir.Package, duringInlining bool) {
     ...
 }
 ```
+
+<br>
 
 函数内部通过 `fn` 获取到对应的 `pri` 实例，并执行 [funcBody()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/noder/reader.go#L1227) 函数，函数内部会通过 [stmts()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/noder/reader.go#L1580) 函数，检查函数体中的所有语句，并返回构造完成的 `body`。
 
@@ -735,6 +777,8 @@ func (r *reader) funcBody(fn *ir.Func) {
     ...
 }
 ```
+
+<br>
 
 而 [stmts()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/noder/reader.go#L1580) 函数中，会继续调用 [typecheck.Stmt()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/typecheck/typecheck.go#L24)、[typecheck()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/typecheck/typecheck.go#L150) 和 [typecheck1()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/typecheck/typecheck.go#L218) 函数，执行真正的类型检查逻辑。
 
@@ -779,6 +823,8 @@ func enqueueFunc(fn *ir.Func) {
 }
 ```
 
+<br>
+
 在 [prepareFunc()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/gc/compile.go#L90C6-L90C17) 函数中，会调用 [walk.Walk](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/walk/walk.go#L22) 函数，将 AST 中的部分关键字和内建函数替换为真正的运行时函数。
 
 ```go
@@ -806,6 +852,8 @@ func walkStmtList(s []ir.Node) {
     }
 }
 ```
+
+<br>
 
 例如对于 `OAS`、`OPANIC` 等语句，会额外调用 [walkExpr()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/walk/expr.go#L29)函数和 [walkExpr1()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/walk/expr.go#L83) 函数 进行处理。对于 `OAS` 节点，会通过 [walkAssign()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/walk/assign.go#L20)  函数继续处理赋值相关逻辑，对于 `panic` 关键字，则转化为调用 `gopanic()` 函数：
 
@@ -843,6 +891,8 @@ func walkExpr1(n ir.Node, init *ir.Nodes) ir.Node {
 }
 ```
 
+<br>
+
 对于部分语句，例如 `OBREAK` 和 `OGOTO` 等，不做特殊处理：
 
 ```go
@@ -858,6 +908,8 @@ func walkStmt(n ir.Node) ir.Node {
     ...
 }
 ```
+
+<br>
 
 对于部分语句，例如 `ORANGE`，直接在 `walkStmt()` 函数中，调用具体的处理逻辑，即 [walkRange()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/walk/range.go#L40)，函数内部将 `ORANGE` 节点转化为 `OFOR` 节点，并根据具体元素，数组、切片、哈希表等，添加不同的处理逻辑。
 
@@ -890,6 +942,8 @@ func walkRange(nrange *ir.RangeStmt) ir.Node {
     return n
 }
 ```
+
+<br>
 
 部分关键字，例如 `make()` 函数相关操作，一般紧跟在赋值节点 `OAS` 之后，会通过 [walkAssign()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/walk/assign.go#L20)函数再调用至[walkExpr()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/walk/expr.go#L29)函数和 [walkExpr1()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/walk/expr.go#L83) 函数中进行处理，并调用至最终实现，即 [walkMakeChan()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/walk/builtin.go#L285) 函数。
 
@@ -942,6 +996,8 @@ func compileFunctions(profile *pgoir.Profile) {
     ...
 }
 ```
+
+<br>
 
 [ssagen.Compile()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/ssagen/pgen.go#L215) 函数内部会调用 [buildssa()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/ssagen/ssa.go#L293) 函数，执行具体的编译操作，函数内部会首先调用 [stmtList()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/ssagen/ssa.go#L1424) 函数，将所有 AST 节点转化为 SSA 形式的中间代码，然后再调用 [compile()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/ssa/compile.go#L30) 函数，进行优化。
 
@@ -1042,6 +1098,8 @@ func Compile(fn *ir.Func, worker int, profile *pgoir.Profile) {
 }
 ```
 
+<br>
+
 在此之后，会构建一个 [Progs](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/objw/prog.go#L67) 结构体，然后通过 [genssa()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/ssagen/ssa.go#L7252) 函数，将 SSA 中间代码存入 [Progs](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/objw/prog.go#L67) 结构体中，并用来生成机器码。
 
 ```go
@@ -1063,6 +1121,8 @@ type Progs struct {
     ...
 }
 ```
+
+<br>
 
 将所有 SSA 形式的中间代码加载完成后，会调用 [Flush()](https://github.com/golang/go/blob/go1.22.0/src/cmd/compile/internal/objw/prog.go#L110) 方法，完成机器码的生成工作。
 
