@@ -2,7 +2,7 @@
 
 在 Redis 的使用中，有五种常见的类型，即 `String`、`Hash`、`List`、`Set` 和 `Zset`，后续还额外支持了四种特殊场景会使用的类型 `BitMap`、`HyperLogLog`、`GEO` 和 `Stream`。通过丰富的数据类型，支持了不同的业务特征。
 
-在底层的实现上，则分别对应了 SDS(Simple Dynamic String)、双向链表(linked list)、压缩列表(ziplist)、哈希表(hash table)、跳表(skiplist)、整数集合(intset)、快表(quicklist)、(listpack) 这几种数据结构。通过不同数据结构的选择，为上层的数据类型的提供了较好的读写性能。
+在底层的实现上，则分别对应了 SDS(Simple Dynamic String)、双向链表(linked list)、压缩列表(ziplist)、哈希表(hash table)、跳表(skiplist)、整数集合(intset)、快表(quicklist)、紧凑列表(listpack) 这几种数据结构。通过不同数据结构的选择，为上层的数据类型的提供了较好的读写性能。
 
 对于具体的类型，比如 `Set`，在数据量较少时，会优先使用整数集合作为底层数据结构，数据量较大时，会使用哈希表作为底层数据结构
 
@@ -479,7 +479,210 @@ static int checkStringLength(client *c, long long size) {
     end
     ```
 
-## 通用命令
+## List
+
+`List` 是最常见的容器类型之一，内部元素按照特定顺序进行排列，在使用时，可以从头部或尾部插入元素。`List` 内部的元素类型，均为 `String` 类型。
+
+在老版本中，如果 `List` 中元素个数较少，且每个元素都小于特定值，会使用压缩列表(ziplist)作为底层数据结构，其他情况会使用双向链表(linked list)作为底层数据结构。
+
+在 3.2 版本以后，`List` 仅会使用快表(quicklist)这一种数据结构。
+
+### 常用命令
+
+```shell
+> rpush list_key r1 # 向队尾(right)插入一个元素，首次插入会新建列表元素
+(integer) 1
+
+> lpush list_key l2 l3 # 向队首(left)按序插入多个元素，即后插入的元素在左侧
+(integer) 3
+
+> rpush list_key r4 r5 # 向队尾(right)按序插入多个元素，即后插入的元素在右侧
+(integer) 5
+
+> lrange list_key 0 -1 # 打印列表内所有元素
+1) "l3"
+2) "l2"
+3) "r1"
+4) "r4"
+5) "r5"
+
+> lrange list_key 3 99 # 打印区间内的所有元素，无越界问题
+1) "r4"
+2) "r5"
+
+> lrange list_key 98 99 # 打印区间内的所有元素，无越界问题
+(empty list or set)
+
+> lpop list_key # 从队首(left)弹出一个元素
+"l3"
+
+> rpop list_key # 从队尾(right)弹出一个元素
+"r5"
+
+> lrange list_key 0 99
+1) "l2"
+2) "r1"
+3) "r4"
+
+> blpop list_key 10 # 从队首(left)弹出一个元素，最多阻塞等待 timeout 秒
+1) "list_key"
+2) "l2"
+
+> brpop list_key 10 # 从队尾(right)弹出一个元素，最多阻塞等待 timeout 秒
+1) "list_key"
+2) "r4"
+
+> rpush list_key v5 v6 v7
+(integer) 4
+
+> rpoplpush list_key list_key2 # 从列表一的队尾弹出一个元素，返回并同时添加至列表二的队首
+"v7"
+
+> brpoplpush list_key list_key2 10 # 最多阻塞等待 timeout 秒
+"v6"
+```
+
+### 应用场景
+
+- 消息队列
+
+  - 消息队列是一种异步通信方式，在实现时，需要保障消息有序、不重复、不丢失。
+
+    <br>
+
+  - 有序：`List` 支持从队首或队尾进行读写，在使用时，控制生产者、消费者固定从不同的方向操作即可
+    - 在消费者读取消息时，可以通过阻塞式命令来读取，例如 `brpop`，避免轮询操作
+
+    <br>
+
+  - 不重复：`List` 本身没有提供相关能力保障，需要业务层自行为每条消息生成一个全局 ID，自行进行保障
+    - 比如使用 `setnx` 命令维护消费记录
+
+    <br>
+
+  - 不丢失：`List` 本身仅提供了消息的入队和出队能力，对于消息出队之后，但是因为网络或业务层问题导致消费行为中断的场景，没有办法进行保障
+    - 从数据交互层面进行分析，其根本原因是缺少了 ack 机制
+    - 所以可以将出队的数据，存储在另外一个队列中，当消费行为完成后，再将数据最终出队，完成删除操作
+    - 通过 `rpoplpush` 和 `brpoplpush` 命令，可以完成上述操作，且过程是原子的
+
+    <br>
+
+  - 消息模型：消息队列有两种常见模型，点对点模型(P2P)与发布订阅模型(Pub/Sub)，但是 `List` 仅具备单播能力，不具备广播能力，即无法实现发布订阅模型
+
+## Hash
+
+`Hash` 类型是典型的 kv 存储容器，可以通过 hash 算法，对 key 实现分组操作，进而快速找到指定 key 值所对应的 value 元素，Redis 本身键值对的存储结构，也是依赖于哈希表。
+
+在老版本中，如果 `Hash` 中元素个数较少，且每个元素都小于特定值，会使用压缩列表(ziplist)作为底层数据结构，其他情况会使用哈希表(hash table)作为底层数据结构。
+
+在 7.0 版本中，压缩列表(ziplist)被彻底废弃，改由紧凑列表(listpack)来实现。
+
+### 常用命令
+
+```shell
+> hset hash_key field1 10  # 向指定哈希表中设置新元素，哈希表不存在则自动创建
+(integer) 1
+
+> hset hash_key field1 100 # 向指定哈希表中设置新元素，filed 重复则更新
+(integer) 0
+
+> hget hash_key field1 # 获取哈希表中指定元素
+"100"
+
+> hmset hash_key field2 20 field3 30 # 向指定哈希表中批量设置新元素
+"OK"
+
+> hmget hash_key field2 field3 # 批量获取哈希表中指定元素
+1) "20"
+2) "30"
+
+> hdel hash_key field2 # 删除哈希表中指定元素
+(integer) 1
+
+> hlen hash_key # 获取指定哈希表的长度
+(integer) 2
+
+> hgetall hash_key # 获取指定哈希表中所有数据
+1) "field1"
+2) "100"
+3) "field3"
+4) "30"
+
+> hincrby hash_key field1 10 # 将哈希表中指定整数元素添加指定增量
+(integer) 110
+```
+
+### 应用场景
+
+- 缓存对象：常使用对象标识加主键一起作为 key 值
+
+  - 直接将缓存对象当作 `Hash` 类型来存储，对象的属性名对应于 `Hash` 对象的 field 部分
+
+    ```shell
+    > hmset user:1 name silk age 18
+    "OK"
+
+    > hgetall user:1
+    1) "name"
+    2) "silk"
+    3) "age"
+    4) "18"
+    ```
+
+  - 与 `String` 类型对比
+    - `String`
+
+        <table style="width:100%; text-align:center;">
+            <tr>
+                <th>Type</th>
+                <th>Key</th>
+                <th>value</th>
+            </tr>
+            <tr>
+                <th rowspan="2">String</th>
+                <td>user:1:name</td>
+                <td>silk</td>
+            </tr>
+            <tr>
+                <td>user:1:age</td>
+                <td>18</td>
+            </tr>
+        </table>
+
+    - `Hash`
+
+        <table style="width:100%; text-align:center;">
+            <tr>
+                <th>Type</th>
+                <th>Key</th>
+                <th>field</th>
+                <th>value</th>
+            </tr>
+            <tr>
+                <th rowspan="3">Hash</th>
+                <td rowspan="3">user:1</td>
+            </tr>
+            <tr>
+                <td>name</td>
+                <td>silk</td>
+            </tr>
+            <tr>
+                <td>age</td>
+                <td>18</td>
+            </tr>
+        </table>
+
+## Set
+
+## Zset
+
+## BitMap
+
+## HyperLogLog
+
+## GEO
+
+## Stream
 
 ## 参考
 
