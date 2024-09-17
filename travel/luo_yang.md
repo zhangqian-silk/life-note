@@ -1,6 +1,6 @@
 # 洛阳
 
-> Git 链接：<https://github.com/Chen-23333/Markdown/blob/master/travel/luo_yang.md>
+> Git 链接：<https://github.com/zhangqian-silk/Markdown/blob/master/travel/luo_yang.md>
 
 <div align=center><img src="images/2023-12-17-18-19-39.png" width="85%"></div>
 
