@@ -164,7 +164,12 @@ struct __attribute__ ((__packed__)) sdshdr8 {
 ```c
 standardConfig static_configs[] = {
     ...
-    createLongLongConfig("proto-max-bulk-len", NULL, DEBUG_CONFIG | MODIFIABLE_CONFIG, 1024*1024, LONG_MAX, server.proto_max_bulk_len, 512ll*1024*1024, MEMORY_CONFIG, NULL, NULL), /* Bulk request max size */
+    createLongLongConfig(
+        "proto-max-bulk-len", NULL, 
+        DEBUG_CONFIG | MODIFIABLE_CONFIG, 1024*1024, 
+        LONG_MAX, server.proto_max_bulk_len, 
+        512ll*1024*1024, MEMORY_CONFIG, NULL, NULL
+    ), 
     ...
 }
 
@@ -306,6 +311,8 @@ static int checkStringLength(client *c, long long size) {
 
 ### 常用命令
 
+> 官方文档：<https://redis.io/docs/latest/commands/?group=string>
+
 - 基础操作：
 
     ```shell
@@ -364,8 +371,7 @@ static int checkStringLength(client *c, long long size) {
     "OK"
 
     > mget key1 key2 # 批量读取
-    1) "value1"
-    2) "value2"
+    1) "value1" 2) "value2"
     ```
 
 <br>
@@ -393,6 +399,8 @@ static int checkStringLength(client *c, long long size) {
 
 - 过期时间
 
+  - `SETEX` 命令在 2.6.12 版本移除，被 `SET` 命令中的 `EX` 参数替代
+
     ```shell
     > set expire_key value ex 3600 # 设置键值对时，设置过期时间
     "OK"
@@ -413,6 +421,8 @@ static int checkStringLength(client *c, long long size) {
 <br>
 
 - 不存在时插入
+
+  - `SETNX` 命令在 2.6.12 版本移除，被 `SET` 命令中的 `NX` 参数替代
 
     ```shell
     > setnx nx_key value # 不存在时插入，结果为 1 代表插入成功
@@ -489,6 +499,8 @@ static int checkStringLength(client *c, long long size) {
 
 ### 常用命令
 
+> 官方文档：<https://redis.io/docs/latest/commands/?group=list>
+
 ```shell
 > rpush list_key r1 # 向队尾(right)插入一个元素，首次插入会新建列表元素
 (integer) 1
@@ -500,15 +512,10 @@ static int checkStringLength(client *c, long long size) {
 (integer) 5
 
 > lrange list_key 0 -1 # 打印列表内所有元素
-1) "l3"
-2) "l2"
-3) "r1"
-4) "r4"
-5) "r5"
+1) "l3" 2) "l2" 3) "r1" 4) "r4" 5) "r5"
 
 > lrange list_key 3 99 # 打印区间内的所有元素，无越界问题
-1) "r4"
-2) "r5"
+1) "r4" 2) "r5"
 
 > lrange list_key 98 99 # 打印区间内的所有元素，无越界问题
 (empty list or set)
@@ -519,18 +526,11 @@ static int checkStringLength(client *c, long long size) {
 > rpop list_key # 从队尾(right)弹出一个元素
 "r5"
 
-> lrange list_key 0 99
-1) "l2"
-2) "r1"
-3) "r4"
-
 > blpop list_key 10 # 从队首(left)弹出一个元素，最多阻塞等待 timeout 秒
-1) "list_key"
-2) "l2"
+1) "list_key" 2) "l2"
 
 > brpop list_key 10 # 从队尾(right)弹出一个元素，最多阻塞等待 timeout 秒
-1) "list_key"
-2) "r4"
+1) "list_key" 2) "r4"
 
 > rpush list_key v5 v6 v7
 (integer) 4
@@ -573,11 +573,31 @@ static int checkStringLength(client *c, long long size) {
 
 `Hash` 类型是典型的 kv 存储容器，可以通过 hash 算法，对 key 实现分组操作，进而快速找到指定 key 值所对应的 value 元素，Redis 本身键值对的存储结构，也是依赖于哈希表。
 
-在老版本中，如果 `Hash` 中元素个数较少，且每个元素都小于特定值，会使用压缩列表(ziplist)作为底层数据结构，其他情况会使用哈希表(hash table)作为底层数据结构。
+在老版本中，如果 `Hash` 中元素个数小于 [hash-max-ziplist-entries](https://github.com/redis/redis/blob/7.0.0/src/config.c#L3055)，且每个元素大小都小于 [hash-max-ziplist-value](https://github.com/redis/redis/blob/7.0.0/src/config.c#L3059)，会使用压缩列表(ziplist)作为底层数据结构，其他情况会使用哈希表(hash table)作为底层数据结构。
 
-在 7.0 版本中，压缩列表(ziplist)被彻底废弃，改由紧凑列表(listpack)来实现。
+在 7.0 版本中，压缩列表(ziplist)被彻底废弃，改由紧凑列表(listpack)来实现，相对应的，配置字段分别为 [hash-max-listpack-entries](https://github.com/redis/redis/blob/7.0.0/src/config.c#L3055) 和 [hash-max-listpack-value](https://github.com/redis/redis/blob/7.0.0/src/config.c#L3059)。
+
+- 其中元素个数限制的默认值为 512 个，元素大小限制默认为 64 字节
+
+```c
+createSizeTConfig(
+    "hash-max-listpack-entries", "hash-max-ziplist-entries", 
+    MODIFIABLE_CONFIG, 0, 
+    LONG_MAX, server.hash_max_listpack_entries, 
+    512, INTEGER_CONFIG, NULL, NULL
+)
+
+createSizeTConfig(
+    "hash-max-listpack-value", "hash-max-ziplist-value", 
+    MODIFIABLE_CONFIG, 0, 
+    LONG_MAX, server.hash_max_listpack_value, 
+    64, MEMORY_CONFIG, NULL, NULL
+)
+```
 
 ### 常用命令
+
+> 官方文档：<https://redis.io/docs/latest/commands/?group=hash>
 
 ```shell
 > hset hash_key field1 10  # 向指定哈希表中设置新元素，哈希表不存在则自动创建
@@ -593,8 +613,7 @@ static int checkStringLength(client *c, long long size) {
 "OK"
 
 > hmget hash_key field2 field3 # 批量获取哈希表中指定元素
-1) "20"
-2) "30"
+1) "20" 2) "30"
 
 > hdel hash_key field2 # 删除哈希表中指定元素
 (integer) 1
@@ -603,10 +622,7 @@ static int checkStringLength(client *c, long long size) {
 (integer) 2
 
 > hgetall hash_key # 获取指定哈希表中所有数据
-1) "field1"
-2) "100"
-3) "field3"
-4) "30"
+1) "field1" 2) "100" 3) "field3" 4) "30"
 
 > hincrby hash_key field1 10 # 将哈希表中指定整数元素添加指定增量
 (integer) 110
@@ -623,10 +639,7 @@ static int checkStringLength(client *c, long long size) {
     "OK"
 
     > hgetall user:1
-    1) "name"
-    2) "silk"
-    3) "age"
-    4) "18"
+    1) "name" 2) "silk" 3) "age" 4) "18"
     ```
 
   - 与 `String` 类型对比
@@ -672,9 +685,280 @@ static int checkStringLength(client *c, long long size) {
             </tr>
         </table>
 
+<br>
+
+- 购物车
+
+  - 以用户 id 作为 key，以商品 id 作为 field，以商品数量作为 value
+
+  - 用户添加商品：`hset cart:user:1 product:1 1`
+  - 用户修改商品数量：`hincrby cart:user:1 product:1 1`
+  - 购物车中商品总数：`hlen cart:user:1`
+  - 删除商品：`hdel cart:user:1 product:1`
+  - 获取购物车所有商品：`hgetall cart:user:1`
+
 ## Set
 
+`Set` 中的数据是无序的，且不存在相同元素。其概念与数学中的集合较为类似，且支持交集、并集、差集等集合间操作。
+
+如果 `Set` 中的元素都是整数，且元素数量小于 [set-max-intset-entries](https://github.com/redis/redis/blob/7.0.0/src/config.c#L3056) 会使用整数集合(intset)的编码方式，其他情况下，会使用哈希表(hash table)作为编码方式。
+
+- 元素个数限制的默认值为 512 个
+
+```c
+createSizeTConfig(
+    "set-max-intset-entries", NULL, MODIFIABLE_CONFIG, 0, 
+    LONG_MAX, server.set_max_intset_entries, 
+    512, INTEGER_CONFIG, NULL, NULL
+)
+```
+
+### 常用命令
+
+> 官方文档：<https://redis.io/docs/latest/commands/?group=set>
+
+- 基础操作
+
+```shell
+> sadd set_key 1 2 3 4 5 # 向集合中添加多个元素，集合不存在会自动创建
+(integer) 5              # 返回添加成功的个数
+
+> srem set_key 2 3 6 # 删除集合中的多个元素
+(integer) 2          # 返回删除成功的个数
+
+> scard set_key # 获取集合元素数量
+(integer) 3
+
+> smembers set_key # 获取集合所有元素
+1) "1" 2) "4" 3) "5"
+
+> sadd set_key 1 2 3 4 5 6 7 # 向集合中添加多个元素，忽略重复元素
+(integer) 4                  # 返回添加成功的个数
+
+> sismember set_key 3 # 判断某个元素是否在集合中
+(integer) 1
+
+> srandmember set_key 2 # 随机获取多个元素
+1) "2" 2) "6"
+
+> spop set_key 2 # 随机获取多个元素，并移除集合
+1) "4" 2) "5"
+
+> smembers set_key
+1) "1" 2) "2" 3) "3" 4) "6" 5) "7"
+```
+
+<br>
+
+- 集合操作
+
+```shell
+> sadd set_key1 1 2 3 4 5
+(integer) 5
+
+> sadd set_key2 1 3 5 7 9
+(integer) 5
+
+> sinter set_key1 set_key2 # 获取多个集合的交集
+1) "1" 2) "3" 3) "5"
+
+> sinterstore inter_res set_key1 set_key2 # 获取交集并存储
+(integer) 3                               # 新集合的元素数量
+
+> sunion set_key1 set_key2 # 获取多个集合的并集
+1) "1" 2) "2" 3) "3" 4) "4" 5) "5" 6) "7" 7) "9"
+
+> sunionstore union_res set_key1 set_key2 # 获取并集并存储
+(integer) 7                               # 新集合的元素数量
+
+> sdiff set_key1 set_key2 # 获取差集
+1) "2" 2) "4"
+
+> sdiff set_key2 set_key1 # 获取差集，集合的顺序会影响结果
+1) "7" 2) "9"
+
+> sdiffstore diff_res set_key1 set_key2 # 获取差集并存储
+(integer) 2                             # 新集合的元素数量
+```
+
+### 应用场景
+
+适合需要对元素去重或者是做集合运算的场景。
+
+- 点赞
+
+  - 利用不可重复的特性，以文章 id 作为 key，以用户 id 作为 value
+
+    <br>
+
+  - 点赞：`sadd like:article:1 user:1`
+  - 取消点赞：`srem like:article:1 user:1`
+  - 获取点赞用户量：`scard like:article:1`
+  - 获取所有点赞用户：`smembers like:article:1`
+  - 判断用户是否点赞：`sismember like:article:1 user:1`
+
+<br>
+
+- 共同关注
+
+  - 利用交集、差集的运算特性，以用户 id 作为 key，以关注的作者作为 value
+    - 需要注意交集、差集的性能问题，避免阻塞主库
+
+    <br>
+
+  - 用户 1 关注：`sadd follow:user:1 author:1 author:2`
+  - 用户 2 关注：`sadd follow:user:2 author:2 author:3`
+  - 共同关注：`sinter follow:user:1 follow:user:2`
+  - 向用户 1 推荐用户 2 的关注内容：`sdiff follow:user:2 follow:user:1`
+
+<br>
+
+- 抽奖
+
+  - 利用不可重复的特性，以抽奖活动作为 key，以参与抽奖的用户 id 作为 value
+
+    <br>
+
+  - 更新参与用户：`sadd lucky:1 user:1 user:2 user:3`
+  - 允许重复中奖
+    - 抽取一个奖项：`srandmember lucky:1 1`
+    - 抽取两个奖项：`srandmember lucky:1 2`
+  - 不允许重复中奖
+    - 抽取一个奖项：`spop lucky:1 1`
+    - 抽取两个奖项：`spop lucky:1 2`
+
 ## Zset
+
+与 `Set` 相比，`Zset` 中的元素在存储时，会额外附带一个用于排序的分值，在具备 `Set` 相关的所有特性的同时，还具备了有序性。
+
+在老版本中，如果 `Zset` 中元素个数小于 [zset-max-ziplist-entries](https://github.com/redis/redis/blob/7.0.0/src/config.c#L3057)，且每个元素大小都小于 [zset-max-ziplist-value](https://github.com/redis/redis/blob/7.0.0/src/config.c#L3061)，会使用压缩列表(ziplist)作为底层数据结构，其他情况会使用跳表(sikplist)作为底层数据结构。
+
+在 7.0 版本中，压缩列表(ziplist)被彻底废弃，改由紧凑列表(listpack)来实现，相对应的，配置字段分别为 [zset-max-listpack-entries](https://github.com/redis/redis/blob/7.0.0/src/config.c#L3057) 和 [zset-max-listpack-value](https://github.com/redis/redis/blob/7.0.0/src/config.c#L3061)。
+
+- 其中元素个数限制的默认值为 128 个，元素大小限制默认为 64 字节
+
+```c
+createSizeTConfig(
+    "zset-max-listpack-entries", "zset-max-ziplist-entries", 
+    MODIFIABLE_CONFIG, 0, 
+    LONG_MAX, server.zset_max_listpack_entries, 
+    128, INTEGER_CONFIG, NULL, NULL
+)
+
+createSizeTConfig(
+    "zset-max-listpack-value", "zset-max-ziplist-value", 
+    MODIFIABLE_CONFIG, 0, 
+    LONG_MAX, server.zset_max_listpack_value, 
+    64, MEMORY_CONFIG, NULL, NULL
+)
+```
+
+### 常用命令
+
+> 官方文档：<https://redis.io/docs/latest/commands/?group=sorted-set>
+
+- 基础操作
+
+    ```shell
+    > zadd zset_key 60 v1 80 v2 40 v3 50 v4 # 批量添加元素和对应分值
+    (integer) 4
+
+    > zrem zset_key v4 # 删除元素
+    (integer) 1
+
+    > zscore zset_key v2 # 获取元素分值
+    "80"
+
+    > zcard zset_key # 获取集合内元素数量
+    (integer) 3
+
+    > zincrby zset_key 30 v2 # 增加某一元素分值
+    "110"
+    ```
+
+<br>
+
+- 分数排序
+
+  - `ZREVRANGE` 命令在 6.2.0 版本移除，被 `ZRANGE` 命令中的 `REV` 参数替代
+  - `ZRANGEBYSCORE` 命令在 6.2.0 版本移除，被 `ZRANGE` 命令中的 `BYSCORE` 参数替代
+  - `ZREVRANGEBYSCORE` 命令在 6.2.0 版本移除，被 `ZRANGE` 命令中的 `REV` 参数和 `BYSCORE` 参数替代
+
+    ```shell
+    > zadd zset_key2 80 v1 40 v2 50 v3 80 v4 80 v5 90 v6
+    (integer) 6
+
+    > zrange zset_key2 0 -1 # 获取所有元素（默认按分数从小到大排列）
+    1) "v2" 2) "v3" 3) "v1" 4) "v4" 5) "v5" 6) "v6"
+
+    > zrevrange zset_key2 0 2 withscores # 逆序获取第 0 个至第 2 个元素及其分数
+    2) "v6" 2) "90" 3) "v5" 4) "80" 5) "v4" 6) "80"
+
+    > zrangebyscore zset_key2 50 80 withscores limit 0 2 # 分页获取分数在指定区间内的元素
+    4) "v3" 2) "50" 3) "v1" 4) "80"
+
+    > zrevrangebyscore zset_key2 80 50 # 逆序获取分数在指定区间内的元素
+    6) "v5" 2) "v4" 3) "v1" 4) "v3"
+
+    >zrange zset_key2 80 50 byscore rev
+    7) "v5" 2) "v4" 3) "v1" 4) "v3"
+    ```
+
+<br>
+
+- Key 值排序
+  - 当集合中所有元素得分相同时，按照 key 值进行排序，当得分不同时，结果是不可预测的
+  - 指定最大值和最小值时，需要以 `[` 或 `(` 开头，表示包含和不包含
+  - 字符 `-` 和 `+` 可用来表示无穷小和无穷大
+
+  - `ZRANGEBYLEX` 命令在 6.2.0 版本移除，被 `ZRANGE` 命令中的 `BYLEX` 参数替代
+  - `ZREVRANGEBYLEX` 命令在 6.2.0 版本移除，被 `ZRANGE` 命令中的 `REV` 参数和 `BYLEX` 参数替代
+
+    ```shell
+    > zadd zset_key3 0 v1 0 v3 0 v2 0 a4 0 c5 0 b6
+    (integer) 6
+
+    > zrangebylex zset_key3 - [v # 返回所有小于等于 'v' 的字符串
+    1) "a4" 2) "b6" 3) "c5"
+
+    > zrangebylex zset_key3 (a4 [v2 # 返回所有大于 'a4'，小于等于 'v2' 的字符串
+    1) "b6" 2) "c5" 3) "v1" 4) "v2"
+
+    > zrevrangebylex zset_key3 [v2 - # 逆序返回所有小于等于 'v2' 的字符串
+    1) "v2" 2) "v1" 3) "c5" 4) "b6" 5) "a4"
+
+    > zrange zset_key3 [b [m bylex # 返回所有大于等于 'b'，小于等于 'm' 的字符串
+    1) "b6" 2) "c5"
+    ```
+
+### 应用场景
+
+具备集合去重的特性，且适合需要根据元素权重进行排序，且权重易于修改的场景，或是根据字符本身进行排序的场景
+
+- 排行榜
+  - 根据权重进行排序，且权重易于修改，例如商品销量榜
+
+    <br>
+
+  - 初始化售卖数量：`zadd rank 200 product:1 50 product:2`
+  - 商品新增售卖量：`zincrby rank 20 product:2`
+  - 商品退货：`zincrby rank -10 product:2`
+  - 获取商品销量：`zscore rank product:2`
+  - 获取商品销量最高的三个元素及其销量：`zrange rank 0 2 withscores rev`
+  - 获取销量在 50 和 200 以内的元素：`zrange rank 50 200 withscores byscore`
+
+<br>
+
+- 目录索引
+  - 利用集合去重的特性，且按照元素本身进行排序，例如通讯录
+  - 需要注意，集合中元素的分值必须相同
+
+    <br>
+
+  - 初始化通讯录：`zadd address_book 0 ZhangSan 0 LiSi`
+  - 新增元素：`zadd address_book 0 WangWu`
+  - 获取所有元素：`zrange address_book - + bylex`
+  - 获取区间 `[A, B)` 中的元素：`zrange address_book [A (B bylex`
 
 ## BitMap
 
