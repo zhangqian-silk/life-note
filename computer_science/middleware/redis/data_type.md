@@ -137,7 +137,7 @@ typedef struct redisObject {
 
 其编码方式可以是 `int`、`embstr` 或是 `raw`，其中 `embstr` 和 `rar`，底层的数据结构为 SDS(Simple Dynamic String)。
 
-### SDS 数据结构
+### 数据结构
 
 SDS 底层的数据结构会根据实际所需大小，动态决定，以 [sdshdr8](https://github.com/redis/redis/blob/7.0.0/src/sds.h#L51) 为例：
 
@@ -962,9 +962,217 @@ createSizeTConfig(
 
 ## BitMap
 
+`BitMap` 是 Redis 内部实现的位图类型，是一串二进制数组，特别适合数据量大且连续的二值统计场景。
+
+在实现上，复用了 `String` 类型，即将统计数据以二进制的方式存储在 `String` 中，所以也可以将 `String` 类型作为 `BitMap` 类型进行使用。需要注意 `String` 中的一位是一个字节，对应于 `BitMap` 中的八个比特。
+
+### 常用命令
+
+> 官方文档：<https://redis.io/docs/latest/commands/?group=bitmap>
+
+- 基础操作
+
+  ```shell
+  > setbit bit_key 2 1 # 设置指定位置(第二位)为指定值(1)，key 不存在时会创建
+  (integer) 0
+
+  > setbit bit_key 2 1 # 设置指定位置(第二位)为指定值(1)，并返回设置前的数值
+  (integer) 1
+
+  > getbit bit_key 2 # 获取指定位置(第二位)的值
+  (integer) 1
+
+  > bitcount bit_key # 获取值为 1 的 bit 数
+  (integer) 1
+
+  > bitcount bit_key 0 1 # 获取指定范围的 byte 内，值为 1 的 bit 数
+  (integer) 1
+
+  > bitcount bit_key 0 1 bit # 获取指定范围的 bit 内，值为 1 的 bit 数
+  (integer) 0
+
+  > bitcount bit_key 0 4 bit
+  (integer) 1
+
+  > bitpos bit_key 1 # 返回第一次出现指定数值(1)的位置
+  (integer) 2
+  ```
+
+<br>
+
+- 运算操作
+  - 需要注意，对于字符串 "1"，其对应的二进制数据为 "00110101"，其他字符同理
+
+  ```shell
+  > set bit_key1 12 # 二进制表示为 00110001 00110010
+  "OK"
+
+  > set bit_key2 34 # 二进制表示为 00110011 00110100
+  "OK"
+
+  > bitop and res bit_key1 bit_key2 # 位图间的与运算
+  (integer) 2
+
+  > get res         # 二进制表示为 00110001 00110000
+  "10"
+
+  > bitop or res bit_key1 bit_key2 # 位图间的或运算
+  (integer) 2
+
+  > get res         # 二进制表示为 00110011 00110110
+  "36"
+
+  > bitop xor res bit_key1 bit_key2 # 位图间的异或运算
+  (integer) 2
+
+  > get res         # 二进制表示为 00000010 00000110
+  "\x02\x06"
+
+  > bitop not res bit_key1 # 位图的取反运算，仅支持单个 key 进行操作
+  (integer) 2
+
+  > get res         # 二进制表示为 11001110 11001101
+  "\xce\xcd"
+  ```
+
+### 应用场景
+
+适合于针对海量连续场景下的二值数据统计
+
+- 签到统计
+  - 签到日期是连续的，签到状态是二值状态
+
+  <br>
+
+  - 用户 100 在 24 年 3 月 26 日签到：`setbit user:100:202403 25 1`
+  - 检查用户是否签到：`getbit user:100:202403 25`
+  - 获取用户某月签到次数：`bitcount user:100:202403`
+  - 获取用户某月首次签到日期：`bitpos user:100:202403 1`
+
+<br>
+
+- 连续签到统计
+  - 以日期作为 key 值，用户 ID 作为偏移量
+
+  <br>
+
+  - 用户 100 在 24 年 3 月 26 日签到：`setbit sign:20240326 99 1`
+  - 获取 21 日至 23 日连续签到的用户：
+    - 三个日期的 bitmap 取交集：`bitop and res sign:20240321 sign:20240322 sign:20240323`
+    - 统计个数：`bitcount res`
+
+<br>
+
+- 统计在线用户
+  - 用户 ID 可认为是连续的，在线状态是二值状态
+
+  <br>
+
+  - 用户 326 上线：`setbit online 325 1`
+  - 用户是否在线：`getbit online 325`
+  - 用户离线：`setbit online 325 0`
+  - 统计在线用户总数：`bitcount online`
+
 ## HyperLogLog
 
+> 基数(Cardinality)，在中文数学中又被称作势，参考：[wiki/势_(数学)](https://zh.wikipedia.org/wiki/%E5%8A%BF_(%E6%95%B0%E5%AD%A6))。
+> 势（英语：Cardinality）在数学里是指如果存在着从集合A到集合B的双射，那么集合A与集合B等势，记为A~B。一个有限集的元素个数是一个自然数，势标志着该集合的大小。对于有限集，势为其元素的数量。比较无穷集里元素的多寡之方法，可在集合论里用集合的等势和某集合的势比另一个集合大这两个概念来达到目的。
+
+`HyperLogLog` 是一种利用了统计算法的数据结构，主要依托于基于概率的基数统计算法，可以以固定的空间占用、极高的时间复杂度提供精确度极高的去重计数，且各数据结构间较为容易做合并计算。
+
+在 Redis 中，每个 `HyperLogLog` 对象只占用 12 KB 内存，可以计算接近 2^64 个不同元素的基数，标准误算率是 0.81%。
+
+### 数据结构
+
+HyperLogLog 由 Philippe Flajolet 在 原始论文[《HyperLogLog: the analysis of a near-optimal cardinality estimation algorithm》](http://algo.inria.fr/flajolet/Publications/FlFuGaMe07.pdf) 中提出。Redis 中对 HLL 的三个 PFADD/PFCOUNT/PFMERGE，都是以 PF 开头，就是纪念 2011 年已经去世的 Philippe Flajolet 。
+
+2013 年 Google 的 一篇论文[《HyperLogLog in Practice: Algorithmic Engineering of a State of The Art Cardinality Estimation Algorithm》](http://static.googleusercontent.com/media/research.google.com/en//pubs/archive/40671.pdf) 深入介绍了其实际实现和变体。
+
+### 常用命令
+
+> 官方文档：<https://redis.io/docs/latest/commands/?group=hyperloglog>
+
+```shell
+> pfadd hll_key v1 v2 v3 v4 # 批量添加元素
+(integer) 1
+
+> pfcount hll_key # 返回元素去重后的数量的估算值
+(integer) 4
+
+> pfadd hll_key2 v4 v5 v6
+(integer) 1
+
+> pfmerge res hll_key hll_key2 # 合并两个 hll 对象，并去重
+"OK"
+
+> pfcount res
+(integer) 6
+```
+
+### 应用场景
+
+- 海量用户时的 UV 计数
+  - `HyperLogLog` 的优势在于仅花费 12 KB 内存，就可以近似计算 $2^64$ 个元素的基数，故天然适合用去重计数的场景
+
+  <br>
+
+  - 新增用户访问：`pfadd page:uv user:1`
+  - 获取计数结果：`pfcount page:uv`
+
 ## GEO
+
+`GEO` 类型顾名思义，是针对于地址信息定制的类型。
+
+在内部实现上，复用了 `Zset` 的结构，通过 [GeoHash](https://en.wikipedia.org/wiki/Geohash) 这种编码方式，将用户的实际经纬度映射到的一个字符串，并将之作为权重信息。
+
+这些字符串可以在一定程度上反映经纬度信息，将这些字符串排序后，相邻的字符串，在地理位置上也是相邻的。
+
+但是将二维数据转化为一维数据时，会先将其按照规则的矩形进行拆分，再用曲线进行填充。一方面相邻的矩形的边界处，有可能地理位置相近，但是编码差距较大，而在曲线坐标突变处，有可能字符串相邻的点，实际地理位置差距较大，需要额外考虑这些临界问题。
+
+### 常用命令
+
+> 官方文档：<https://redis.io/docs/latest/commands/?group=geo>
+
+```shell
+> geoadd geo_key 116.40 39.92 v1 116.27 40.00 v2 # 新增数据
+(integer) 2
+
+> geopos geo_key v1 # 获取某一点的经纬度（浮点数存在精度问题）
+1) 1) "116.39999896287918091"
+   2) "39.9199990416181052"
+
+> geodist geo_key v1 v2 km # 获取某两个元素间的距离
+"14.2132"
+
+> georadius geo_key 116.40 39.92 1 km # 获取给定坐标，附近指定距离(1km)内的元素
+1) "v1"
+
+> georadius geo_key 116.40 39.92 1 km withcoord # 返回目标元素的经纬度
+1) 1) "v1"
+   2) 1) "116.39999896287918091"
+      2) "39.9199990416181052"
+
+> georadius geo_key 116.40 39.92 100 km withdist desc # 逆序返回目标元素和指定元素的距离
+1) 1) "v2"
+   2) "14.2132"
+2) 1) "v1"
+   2) "0.0001"
+
+> georadius geo_key 116.40 39.92 100 km withdist count 1 # 返回指定数量
+1) 1) "v1"
+   2) "0.0001"
+```
+
+### 应用场景
+
+- 打车服务
+  - 分区域将司机的坐标信息存储在一个集合中，用户打车时根据其实时坐标获取相关信息
+  - 实际应用中，还需要考虑线（道路、河流等）和面（建筑物）的问题，并非仅考虑点的问题
+
+  <br>
+
+  - 存储汽车信息：`geoadd position:car 116.40 39.92 car:1`
+  - 获取用户附近最近的 5 个车辆：`georadius position:car 116.43 39.90 10 km count 5`
 
 ## Stream
 
@@ -972,3 +1180,4 @@ createSizeTConfig(
 
 - 《Redis 设计与实现》（基于 Redis 3.0 版本）
 - <https://xiaolincoding.com/redis/data_struct/command.html#string>
+- <https://panzhongxian.cn/cn/2024/04/hll-simple-introduce/>
