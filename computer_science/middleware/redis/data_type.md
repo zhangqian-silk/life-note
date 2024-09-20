@@ -719,67 +719,67 @@ createSizeTConfig(
 
 - 基础操作
 
-```shell
-> sadd set_key 1 2 3 4 5 # 向集合中添加多个元素，集合不存在会自动创建
-(integer) 5              # 返回添加成功的个数
+  ```shell
+  > sadd set_key 1 2 3 4 5 # 向集合中添加多个元素，集合不存在会自动创建
+  (integer) 5              # 返回添加成功的个数
 
-> srem set_key 2 3 6 # 删除集合中的多个元素
-(integer) 2          # 返回删除成功的个数
+  > srem set_key 2 3 6 # 删除集合中的多个元素
+  (integer) 2          # 返回删除成功的个数
 
-> scard set_key # 获取集合元素数量
-(integer) 3
+  > scard set_key # 获取集合元素数量
+  (integer) 3
 
-> smembers set_key # 获取集合所有元素
-1) "1" 2) "4" 3) "5"
+  > smembers set_key # 获取集合所有元素
+  1) "1" 2) "4" 3) "5"
 
-> sadd set_key 1 2 3 4 5 6 7 # 向集合中添加多个元素，忽略重复元素
-(integer) 4                  # 返回添加成功的个数
+  > sadd set_key 1 2 3 4 5 6 7 # 向集合中添加多个元素，忽略重复元素
+  (integer) 4                  # 返回添加成功的个数
 
-> sismember set_key 3 # 判断某个元素是否在集合中
-(integer) 1
+  > sismember set_key 3 # 判断某个元素是否在集合中
+  (integer) 1
 
-> srandmember set_key 2 # 随机获取多个元素
-1) "2" 2) "6"
+  > srandmember set_key 2 # 随机获取多个元素
+  1) "2" 2) "6"
 
-> spop set_key 2 # 随机获取多个元素，并移除集合
-1) "4" 2) "5"
+  > spop set_key 2 # 随机获取多个元素，并移除集合
+  1) "4" 2) "5"
 
-> smembers set_key
-1) "1" 2) "2" 3) "3" 4) "6" 5) "7"
-```
+  > smembers set_key
+  1) "1" 2) "2" 3) "3" 4) "6" 5) "7"
+  ```
 
 <br>
 
 - 集合操作
 
-```shell
-> sadd set_key1 1 2 3 4 5
-(integer) 5
+  ```shell
+  > sadd set_key1 1 2 3 4 5
+  (integer) 5
 
-> sadd set_key2 1 3 5 7 9
-(integer) 5
+  > sadd set_key2 1 3 5 7 9
+  (integer) 5
 
-> sinter set_key1 set_key2 # 获取多个集合的交集
-1) "1" 2) "3" 3) "5"
+  > sinter set_key1 set_key2 # 获取多个集合的交集
+  1) "1" 2) "3" 3) "5"
 
-> sinterstore inter_res set_key1 set_key2 # 获取交集并存储
-(integer) 3                               # 新集合的元素数量
+  > sinterstore inter_res set_key1 set_key2 # 获取交集并存储
+  (integer) 3                               # 新集合的元素数量
 
-> sunion set_key1 set_key2 # 获取多个集合的并集
-1) "1" 2) "2" 3) "3" 4) "4" 5) "5" 6) "7" 7) "9"
+  > sunion set_key1 set_key2 # 获取多个集合的并集
+  1) "1" 2) "2" 3) "3" 4) "4" 5) "5" 6) "7" 7) "9"
 
-> sunionstore union_res set_key1 set_key2 # 获取并集并存储
-(integer) 7                               # 新集合的元素数量
+  > sunionstore union_res set_key1 set_key2 # 获取并集并存储
+  (integer) 7                               # 新集合的元素数量
 
-> sdiff set_key1 set_key2 # 获取差集
-1) "2" 2) "4"
+  > sdiff set_key1 set_key2 # 获取差集
+  1) "2" 2) "4"
 
-> sdiff set_key2 set_key1 # 获取差集，集合的顺序会影响结果
-1) "7" 2) "9"
+  > sdiff set_key2 set_key1 # 获取差集，集合的顺序会影响结果
+  1) "7" 2) "9"
 
-> sdiffstore diff_res set_key1 set_key2 # 获取差集并存储
-(integer) 2                             # 新集合的元素数量
-```
+  > sdiffstore diff_res set_key1 set_key2 # 获取差集并存储
+  (integer) 2                             # 新集合的元素数量
+  ```
 
 ### 应用场景
 
@@ -1172,9 +1172,92 @@ HyperLogLog 由 Philippe Flajolet 在 原始论文[《HyperLogLog: the analysis 
   <br>
 
   - 存储汽车信息：`geoadd position:car 116.40 39.92 car:1`
-  - 获取用户附近最近的 5 个车辆：`georadius position:car 116.43 39.90 10 km count 5`
+  - 获取用户附近 10 km 最近的 5 个车辆：`georadius position:car 116.43 39.90 10 km count 5`
 
 ## Stream
+
+`Stream` 是 Redis 在 5.0 新增的类型，针对于消息队列进行设计，支持自动生成消息的全局 ID、支持消息的 ack 能力、支持消息组模式等。
+
+### 常用命令
+
+> 官方文档：<https://redis.io/docs/latest/commands/?group=stream>
+
+- 添加消息：
+
+  ```shell
+  > xadd stream_key * idx 1 name jia # 添加一条消息，* 代表使用 redis 默认 ID
+  "1726845349463-0" # 返回消息 id，前者为时间戳，后面为时间戳相同时的自增 id
+
+  > xadd stream_key * idx 2 name yi # 每条消息可以包含多个键值对，即 field 和 value
+  "1726845356176-0"
+
+  > xadd stream_key * idx 3 name bing
+  "1726845363024-0"
+
+  > xadd stream_key_id 1 idx 1 name zi # 也可以手动指定 id(1)，但是 id 需要是递增的
+  "1-0"  # 默认 id 第二段为 0，遵循 2-0 > 1-1 > 1-0 这种逻辑
+
+  > xlen stream_key # 查看当前队列长度
+  (integer) 3
+  ```
+
+<br>
+
+- 读消息
+  - 所有操作均为幂等操作，可以重复读取
+
+  ```shell
+  > xrange stream_key 1726845356176 + # 查看 id 范围内的消息，同样 + 和 - 代表正负无穷
+  1) 1) "1726845356176-0"
+     1) 1) "idx" 2) "2" 3) "name" 4) "yi"
+  2) 1) "1726845363024-0"
+     1) 1) "idx" 2) "3" 3) "name" 4) "bing"
+
+  > xread count 2 streams stream_key stream_key_id 0 0 # 从多个消息队列，分别读取 count(2) 条消息
+  1) 1) "stream_key"
+     2) 1) 1) "1726845349463-0"
+          2) 1) "idx" 2) "1" 3) "name" 4) "jia"
+        2) 1) "1726845356176-0"
+          2) 1) "idx" 2) "2" 3) "name" 4) "yi"
+  2) 1) "stream_key_id"
+    2) 1) 1) "1-0"
+          2) 1) "idx" 2) "1" 3) "name" 4) "zi"
+
+  > xread block 1000 streams stream_key 1726845356176 # 从指定 id 之后开始读取，最多阻塞 1000 毫秒
+  1) 1) "stream_key"
+     2) 1) 1) "1726845363024-0"
+          2) 1) "idx" 2) "3" 3) "name" 4) "bing"
+
+  > xread count 2 streams stream_key + # + 代表读取最新的一条消息（count 指令无效）
+  1) 1) "stream_key"
+     2) 1) 1) "1726845363024-0"
+          2) 1) "idx" 2) "3" 3) "name" 4) "bing"
+
+  > xread count 2 block 1000 streams stream_key $ # $ 代表读取该命令阻塞期间，新写入的消息
+  (nil)
+  ```
+
+<br>
+
+- 删除消息
+  - 一般用于真正消费后，再移除消息，即确认消费
+
+  ```shell
+  > xdel stream_key 1726845356176
+  (integer) 1
+
+  > xrange stream_key - +
+  1) 1) "1726845349463-0"
+     1) 1) "idx" 2) "1" 3) "name" 4) "jia"
+  2) 1) "1726845363024-0"
+     1) 1) "idx" 2) "3" 3) "name" 4) "bing"
+  ```
+
+<br>
+
+- 消费组
+
+### 应用场景
 
 ## 参考
 
