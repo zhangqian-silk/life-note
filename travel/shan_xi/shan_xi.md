@@ -1,6 +1,6 @@
-# 青岛
+# 山西
 
-> Git 链接：<https://github.com/Chen-23333/Markdown/blob/master/travel/shan_xi.md>
+> Git 链接：<https://github.com/zhangqian-silk/Markdown/blob/master/travel/shan_xi.md>
 
 ## 景点
 
