@@ -2,7 +2,7 @@
 
 ## Rules
 
-## Markdown
+### Markdown
 
 - 无序列表使用 `-` 而不是 `*`
 - MD022/blanks-around-headings: Headings should be surrounded by blank lines[Expected: 1; Below]
