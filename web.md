@@ -8,6 +8,12 @@
 ## 二次元/壁纸
 
 - [2DWallpapers](https://www.2dwallpapers.com) — 免费的二次元、动漫、游戏壁纸下载网站，无需登录，无水印，全部可以直接免费下载
+- [AlphaCoders](https://alphacoders.com) — 高清壁纸、背景图片、游戏艺术图社区，提供动漫、游戏、风景等多种分类的壁纸下载
+- [Wallhaven](https://wallhaven.cc) — 高质量壁纸分享平台，支持多种分辨率，拥有动漫、风景、抽象等丰富分类，支持按颜色、标签筛选
+
+## 图片素材
+
+- [Pixabay](https://pixabay.com) — 免费图片、视频、矢量图素材库，无需注册即可下载，支持商用，拥有丰富的免版税素材
 
 ## 在线游戏
 
