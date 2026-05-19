@@ -10,4 +10,7 @@
 
 其对应的批量出售链接为：`https://steamcommunity.com/market/multisell?appid={游戏ID}&contextid=2&items[]={商品名称}`
 
-例如 CSGO 中的千瓦武器箱，商品链接为 `https://steamcommunity.com/market/listings/730/Kilowatt%20Case`，其对应的批量出售链接为 `https://steamcommunity.com/market/multisell?appid=730&contextid=2&items[]=Kilowatt%20Case`
+例如：
+
+- CSGO 中的千瓦武器箱，商品链接为 `https://steamcommunity.com/market/listings/730/Kilowatt%20Case`，其对应的批量出售链接为 `https://steamcommunity.com/market/multisell?appid=730&contextid=2&items[]=Kilowatt%20Case`
+- CSGO 中的光谱2号武器箱，商品链接为 `https://steamcommunity.com/market/listings/730/Spectrum%202%20Case`，其对应的批量出售链接为 `https://steamcommunity.com/market/multisell?appid=730&contextid=2&items[]=Spectrum%202%20Case`
