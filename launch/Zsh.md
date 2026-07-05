@@ -223,7 +223,63 @@ npm -v
 pnpm -v
 ```
 
-## 9. 写入 `.zshrc`
+## 9. 迁移已有 Shell 配置
+
+写入新的 `.zshrc` 之前，必须先检查原有 shell 配置，把本机已有的环境变量、代理、别名、函数和路径配置迁移过去。
+
+先归档当前配置：
+
+```shell
+mkdir -p "$HOME/.config/shell-migration"
+
+for file in \
+  "$HOME/.bashrc" \
+  "$HOME/.bash_profile" \
+  "$HOME/.profile" \
+  "$HOME/.zshrc" \
+  "$HOME/.zprofile" \
+  "$HOME/.zshenv" \
+  /etc/profile \
+  /etc/bashrc \
+  /etc/profile.d/*.sh
+do
+  [ -r "$file" ] || continue
+  {
+    echo
+    echo "===== $file ====="
+    sed -n '1,240p' "$file"
+  } >> "$HOME/.config/shell-migration/before-zsh.txt"
+done
+```
+
+重点检查这些内容：
+
+```shell
+grep -nEi \
+  'http_proxy|https_proxy|all_proxy|no_proxy|proxy|export PATH|PATH=|alias |function |NVM_DIR|PNPM_HOME|CONDA|JAVA_HOME|GOPATH|GOROOT|PYENV|RUSTUP|EDITOR|LANG|LC_|SSH_AUTH_SOCK|GPG_TTY' \
+  "$HOME/.config/shell-migration/before-zsh.txt"
+```
+
+迁移规则：
+
+- `http_proxy`、`https_proxy`、`all_proxy`、`no_proxy` 等网络代理，放到 `.zshrc` 的 `Local environment` 区域。
+- 原有 `PATH` 追加项，合并进 zsh 的 `path=(...)` 数组，避免重复拼接字符串。
+- 原有 `alias` 和函数，放到 oh-my-zsh 加载之后。
+- 原有语言环境变量，如 `JAVA_HOME`、`GOPATH`、`GOROOT`、`RUSTUP_HOME`、`PYENV_ROOT`，按原值迁移。
+- 原有 `EDITOR`、`LANG`、`LC_*`、`SSH_AUTH_SOCK`、`GPG_TTY` 等通用变量，确认仍需要后迁移。
+- nvm、pnpm、conda 等工具如果已经在新 `.zshrc` 中统一配置，不要重复 source。
+
+示例：如果原来的 bash 中有代理配置：
+
+```shell
+export http_proxy="http://127.0.0.1:7890"
+export https_proxy="http://127.0.0.1:7890"
+export no_proxy="localhost,127.0.0.1,.example.com,10.0.0.0/8"
+```
+
+新的 `.zshrc` 里也要保留到 `Local environment` 区域。
+
+## 10. 写入 `.zshrc`
 
 写入前先备份：
 
@@ -234,10 +290,7 @@ cp -a "$HOME/.zshrc" "$HOME/.zshrc.bak.$(date +%Y%m%d%H%M%S)" 2>/dev/null || tru
 写入 `~/.zshrc`：
 
 ```shell
-# Powerlevel10k instant prompt. Keep this before anything that can print output.
-if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]; then
-  source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
-fi
+# Powerlevel10k instant prompt is disabled for stable rendering in remote terminals.
 
 # ----- Paths -----
 export CONDA_AUTO_ACTIVATE_BASE=false
@@ -258,7 +311,7 @@ export PATH
 
 # ----- Oh My Zsh -----
 export ZSH="$HOME/.oh-my-zsh"
-if [[ -t 1 ]]; then
+if [[ -o interactive && ( -t 0 || -t 1 ) ]]; then
   ZSH_THEME="powerlevel10k/powerlevel10k"
 else
   ZSH_THEME=""
@@ -313,13 +366,22 @@ nvm() {
 }
 
 # ----- Powerlevel10k -----
-[[ -t 1 && -r "$HOME/.p10k.zsh" ]] && source "$HOME/.p10k.zsh"
+[[ -o interactive && ( -t 0 || -t 1 ) && -r "$HOME/.p10k.zsh" ]] && source "$HOME/.p10k.zsh"
+
+# ----- Local environment migrated from previous shell -----
+# Put host-specific settings from ~/.bashrc, ~/.bash_profile, ~/.profile and
+# /etc/profile.d/*.sh here. Keep values consistent with the previous shell.
+#
+# Proxy example:
+# export http_proxy="http://127.0.0.1:7890"
+# export https_proxy="http://127.0.0.1:7890"
+# export no_proxy="localhost,127.0.0.1,.example.com,10.0.0.0/8"
 
 # Keep zoxide last so its shell hook stays registered after all framework setup.
 command -v zoxide &>/dev/null && eval "$(zoxide init zsh)"
 ```
 
-## 10. 写入 `.p10k.zsh`
+## 11. 写入 `.p10k.zsh`
 
 写入前先备份：
 
@@ -357,7 +419,7 @@ conflicted #B66A86
 
 `root@host` 使用 `#101523` 背景和 `#E4D29A` 文字，避免默认 root 红色模块过于显眼。
 
-## 11. 安装 Nerd Font
+## 12. 安装 Nerd Font
 
 Powerlevel10k 需要本地终端使用 Nerd Font。推荐安装 `MesloLGS NF`。
 
@@ -393,7 +455,7 @@ VS Code 终端字体：
 }
 ```
 
-## 12. 验证
+## 13. 验证
 
 ```shell
 zsh -n "$HOME/.zshrc"
@@ -423,7 +485,7 @@ echo "$ZSH_THEME"
 powerlevel10k/powerlevel10k
 ```
 
-## 13. 更新
+## 14. 更新
 
 oh-my-zsh：
 
