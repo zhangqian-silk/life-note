@@ -1,0 +1,100 @@
+
+  # Show status of repositories of these types. You can add svn and/or hg if you are
+  # using them. If you do, your prompt may become slow even when your current directory
+  # isn't in an svn or hg repository.
+  typeset -g POWERLEVEL9K_VCS_BACKENDS=(git)
+
+  ##########################[ status: exit code of the last command ]###########################
+  # Enable OK_PIPE, ERROR_PIPE and ERROR_SIGNAL status states to allow us to enable, disable and
+  # style them independently from the regular OK and ERROR state.
+  typeset -g POWERLEVEL9K_STATUS_EXTENDED_STATES=true
+
+  # Status on success. No content, just an icon. No need to show it if prompt_char is enabled as
+  # it will signify success by turning green.
+  typeset -g POWERLEVEL9K_STATUS_OK=true
+  typeset -g POWERLEVEL9K_STATUS_OK_VISUAL_IDENTIFIER_EXPANSION='✔'
+  typeset -g POWERLEVEL9K_STATUS_OK_FOREGROUND=2
+  typeset -g POWERLEVEL9K_STATUS_OK_BACKGROUND=0
+
+  # Status when some part of a pipe command fails but the overall exit status is zero. It may look
+  # like this: 1|0.
+  typeset -g POWERLEVEL9K_STATUS_OK_PIPE=true
+  typeset -g POWERLEVEL9K_STATUS_OK_PIPE_VISUAL_IDENTIFIER_EXPANSION='✔'
+  typeset -g POWERLEVEL9K_STATUS_OK_PIPE_FOREGROUND=2
+  typeset -g POWERLEVEL9K_STATUS_OK_PIPE_BACKGROUND=0
+
+  # Status when it's just an error code (e.g., '1'). No need to show it if prompt_char is enabled as
+  # it will signify error by turning red.
+  typeset -g POWERLEVEL9K_STATUS_ERROR=true
+  typeset -g POWERLEVEL9K_STATUS_ERROR_VISUAL_IDENTIFIER_EXPANSION='✘'
+  typeset -g POWERLEVEL9K_STATUS_ERROR_FOREGROUND=3
+  typeset -g POWERLEVEL9K_STATUS_ERROR_BACKGROUND=1
+
+  # Status when the last command was terminated by a signal.
+  typeset -g POWERLEVEL9K_STATUS_ERROR_SIGNAL=true
+  # Use terse signal names: "INT" instead of "SIGINT(2)".
+  typeset -g POWERLEVEL9K_STATUS_VERBOSE_SIGNAME=false
+  typeset -g POWERLEVEL9K_STATUS_ERROR_SIGNAL_VISUAL_IDENTIFIER_EXPANSION='✘'
+  typeset -g POWERLEVEL9K_STATUS_ERROR_SIGNAL_FOREGROUND=3
+  typeset -g POWERLEVEL9K_STATUS_ERROR_SIGNAL_BACKGROUND=1
+
+  # Status when some part of a pipe command fails and the overall exit status is also non-zero.
+  # It may look like this: 1|0.
+  typeset -g POWERLEVEL9K_STATUS_ERROR_PIPE=true
+  typeset -g POWERLEVEL9K_STATUS_ERROR_PIPE_VISUAL_IDENTIFIER_EXPANSION='✘'
+  typeset -g POWERLEVEL9K_STATUS_ERROR_PIPE_FOREGROUND=3
+  typeset -g POWERLEVEL9K_STATUS_ERROR_PIPE_BACKGROUND=1
+
+  ###################[ command_execution_time: duration of the last command ]###################
+  # Execution time color.
+  typeset -g POWERLEVEL9K_COMMAND_EXECUTION_TIME_FOREGROUND=0
+  typeset -g POWERLEVEL9K_COMMAND_EXECUTION_TIME_BACKGROUND=3
+  # Show duration of the last command if takes at least this many seconds.
+  typeset -g POWERLEVEL9K_COMMAND_EXECUTION_TIME_THRESHOLD=3
+  # Show this many fractional digits. Zero means round to seconds.
+  typeset -g POWERLEVEL9K_COMMAND_EXECUTION_TIME_PRECISION=0
+  # Duration format: 1d 2h 3m 4s.
+  typeset -g POWERLEVEL9K_COMMAND_EXECUTION_TIME_FORMAT='d h m s'
+  # Custom icon.
+  typeset -g POWERLEVEL9K_COMMAND_EXECUTION_TIME_VISUAL_IDENTIFIER_EXPANSION=
+  # Custom prefix.
+  # typeset -g POWERLEVEL9K_COMMAND_EXECUTION_TIME_PREFIX='took '
+
+  #######################[ background_jobs: presence of background jobs ]#######################
+  # Background jobs color.
+  typeset -g POWERLEVEL9K_BACKGROUND_JOBS_FOREGROUND=6
+  typeset -g POWERLEVEL9K_BACKGROUND_JOBS_BACKGROUND=0
+  # Don't show the number of background jobs.
+  typeset -g POWERLEVEL9K_BACKGROUND_JOBS_VERBOSE=false
+  # Custom icon.
+  # typeset -g POWERLEVEL9K_BACKGROUND_JOBS_VISUAL_IDENTIFIER_EXPANSION='⭐'
+
+  #######################[ direnv: direnv status (https://direnv.net/) ]########################
+  # Direnv color.
+  typeset -g POWERLEVEL9K_DIRENV_FOREGROUND=3
+  typeset -g POWERLEVEL9K_DIRENV_BACKGROUND=0
+  # Custom icon.
+  # typeset -g POWERLEVEL9K_DIRENV_VISUAL_IDENTIFIER_EXPANSION='⭐'
+
+  ###############[ asdf: asdf version manager (https://github.com/asdf-vm/asdf) ]###############
+  # Default asdf color. Only used to display tools for which there is no color override (see below).
+  # Tip:  Override these parameters for ${TOOL} with POWERLEVEL9K_ASDF_${TOOL}_FOREGROUND and
+  # POWERLEVEL9K_ASDF_${TOOL}_BACKGROUND.
+  typeset -g POWERLEVEL9K_ASDF_FOREGROUND=0
+  typeset -g POWERLEVEL9K_ASDF_BACKGROUND=7
+
+  # There are four parameters that can be used to hide asdf tools. Each parameter describes
+  # conditions under which a tool gets hidden. Parameters can hide tools but not unhide them. If at
+  # least one parameter decides to hide a tool, that tool gets hidden. If no parameter decides to
+  # hide a tool, it gets shown.
+  #
+  # Special note on the difference between POWERLEVEL9K_ASDF_SOURCES and
+  # POWERLEVEL9K_ASDF_PROMPT_ALWAYS_SHOW. Consider the effect of the following commands:
+  #
+  #   asdf local  python 3.8.1
+  #   asdf global python 3.8.1
+  #
+  # After running both commands the current python version is 3.8.1 and its source is "local" as
+  # it takes precedence over "global". If POWERLEVEL9K_ASDF_PROMPT_ALWAYS_SHOW is set to false,
+  # it'll hide python version in this case because 3.8.1 is the same as the global version.
+  # POWERLEVEL9K_ASDF_SOURCES will hide python version only if the value of this parameter doesn't

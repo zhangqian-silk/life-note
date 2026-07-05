@@ -1,0 +1,100 @@
+  #
+  #   1. A pattern against which the current directory ($PWD) is matched. Matching is done with
+  #      extended_glob option enabled.
+  #   2. Directory class for the purpose of styling.
+  #   3. An empty string.
+  #
+  # Triplets are tried in order. The first triplet whose pattern matches $PWD wins.
+  #
+  # If POWERLEVEL9K_DIR_SHOW_WRITABLE is set to v3, non-writable and non-existent directories
+  # acquire class suffix _NOT_WRITABLE and NON_EXISTENT respectively.
+  #
+  # For example, given these settings:
+  #
+  #   typeset -g POWERLEVEL9K_DIR_CLASSES=(
+  #     '~/work(|/*)'  WORK     ''
+  #     '~(|/*)'       HOME     ''
+  #     '*'            DEFAULT  '')
+  #
+  # Whenever the current directory is ~/work or a subdirectory of ~/work, it gets styled with one
+  # of the following classes depending on its writability and existence: WORK, WORK_NOT_WRITABLE or
+  # WORK_NON_EXISTENT.
+  #
+  # Simply assigning classes to directories doesn't have any visible effects. It merely gives you an
+  # option to define custom colors and icons for different directory classes.
+  #
+  #   # Styling for WORK.
+  #   typeset -g POWERLEVEL9K_DIR_WORK_VISUAL_IDENTIFIER_EXPANSION='⭐'
+  #   typeset -g POWERLEVEL9K_DIR_WORK_BACKGROUND=4
+  #   typeset -g POWERLEVEL9K_DIR_WORK_FOREGROUND=254
+  #   typeset -g POWERLEVEL9K_DIR_WORK_SHORTENED_FOREGROUND=250
+  #   typeset -g POWERLEVEL9K_DIR_WORK_ANCHOR_FOREGROUND=255
+  #
+  #   # Styling for WORK_NOT_WRITABLE.
+  #   typeset -g POWERLEVEL9K_DIR_WORK_NOT_WRITABLE_VISUAL_IDENTIFIER_EXPANSION='⭐'
+  #   typeset -g POWERLEVEL9K_DIR_WORK_NOT_WRITABLE_BACKGROUND=4
+  #   typeset -g POWERLEVEL9K_DIR_WORK_NOT_WRITABLE_FOREGROUND=254
+  #   typeset -g POWERLEVEL9K_DIR_WORK_NOT_WRITABLE_SHORTENED_FOREGROUND=250
+  #   typeset -g POWERLEVEL9K_DIR_WORK_NOT_WRITABLE_ANCHOR_FOREGROUND=255
+  #
+  #   # Styling for WORK_NON_EXISTENT.
+  #   typeset -g POWERLEVEL9K_DIR_WORK_NON_EXISTENT_VISUAL_IDENTIFIER_EXPANSION='⭐'
+  #   typeset -g POWERLEVEL9K_DIR_WORK_NON_EXISTENT_BACKGROUND=4
+  #   typeset -g POWERLEVEL9K_DIR_WORK_NON_EXISTENT_FOREGROUND=254
+  #   typeset -g POWERLEVEL9K_DIR_WORK_NON_EXISTENT_SHORTENED_FOREGROUND=250
+  #   typeset -g POWERLEVEL9K_DIR_WORK_NON_EXISTENT_ANCHOR_FOREGROUND=255
+  #
+  # If a styling parameter isn't explicitly defined for some class, it falls back to the classless
+  # parameter. For example, if POWERLEVEL9K_DIR_WORK_NOT_WRITABLE_FOREGROUND is not set, it falls
+  # back to POWERLEVEL9K_DIR_FOREGROUND.
+  #
+  typeset -g POWERLEVEL9K_DIR_CLASSES=()
+
+  # Custom prefix.
+  # typeset -g POWERLEVEL9K_DIR_PREFIX='in '
+
+  #####################################[ vcs: git status ]######################################
+  # Version control background colors.
+  typeset -g POWERLEVEL9K_VCS_CLEAN_BACKGROUND=2
+  typeset -g POWERLEVEL9K_VCS_MODIFIED_BACKGROUND=3
+  typeset -g POWERLEVEL9K_VCS_UNTRACKED_BACKGROUND=2
+  typeset -g POWERLEVEL9K_VCS_CONFLICTED_BACKGROUND=3
+  typeset -g POWERLEVEL9K_VCS_LOADING_BACKGROUND=8
+
+  # Branch icon. Set this parameter to '\UE0A0 ' for the popular Powerline branch icon.
+  typeset -g POWERLEVEL9K_VCS_BRANCH_ICON=
+
+  # Untracked files icon. It's really a question mark, your font isn't broken.
+  # Change the value of this parameter to show a different icon.
+  typeset -g POWERLEVEL9K_VCS_UNTRACKED_ICON='?'
+
+  # Formatter for Git status.
+  #
+  # Example output: master wip ⇣42⇡42 *42 merge ~42 +42 !42 ?42.
+  #
+  # You can edit the function to customize how Git status looks.
+  #
+  # VCS_STATUS_* parameters are set by gitstatus plugin. See reference:
+  # https://github.com/romkatv/gitstatus/blob/master/gitstatus.plugin.zsh.
+  function my_git_formatter() {
+    emulate -L zsh
+
+    if [[ -n $P9K_CONTENT ]]; then
+      # If P9K_CONTENT is not empty, use it. It's either "loading" or from vcs_info (not from
+      # gitstatus plugin). VCS_STATUS_* parameters are not available in this case.
+      typeset -g my_git_format=$P9K_CONTENT
+      return
+    fi
+
+    # Styling for different parts of Git status.
+    local       meta='%F{#181F34}' # bg color foreground
+    local      clean='%F{#101523}' # surface color foreground
+    local   modified='%F{#101523}' # surface color foreground
+    local  untracked='%F{#101523}' # surface color foreground
+    local conflicted='%F{#FFFFFF}' # light foreground
+
+    local res
+
+    if [[ -n $VCS_STATUS_LOCAL_BRANCH ]]; then
+      local branch=${(V)VCS_STATUS_LOCAL_BRANCH}
+      # If local branch name is at most 32 characters long, show it in full.

@@ -327,61 +327,35 @@ command -v zoxide &>/dev/null && eval "$(zoxide init zsh)"
 cp -a "$HOME/.p10k.zsh" "$HOME/.p10k.zsh.bak.$(date +%Y%m%d%H%M%S)" 2>/dev/null || true
 ```
 
-写入 `~/.p10k.zsh`：
+从仓库写入固定配置：
 
 ```shell
-# Minimal Powerlevel10k configuration for server use.
-
-typeset -g POWERLEVEL9K_INSTANT_PROMPT=quiet
-typeset -g POWERLEVEL9K_DISABLE_CONFIGURATION_WIZARD=true
-
-typeset -g POWERLEVEL9K_MODE=nerdfont-complete
-typeset -g POWERLEVEL9K_PROMPT_ON_NEWLINE=false
-typeset -g POWERLEVEL9K_RPROMPT_ON_NEWLINE=false
-typeset -g POWERLEVEL9K_MULTILINE_FIRST_PROMPT_PREFIX=''
-typeset -g POWERLEVEL9K_MULTILINE_NEWLINE_PROMPT_PREFIX=''
-typeset -g POWERLEVEL9K_MULTILINE_LAST_PROMPT_PREFIX=''
-typeset -g POWERLEVEL9K_MULTILINE_FIRST_PROMPT_SUFFIX=''
-typeset -g POWERLEVEL9K_MULTILINE_NEWLINE_PROMPT_SUFFIX=''
-typeset -g POWERLEVEL9K_MULTILINE_LAST_PROMPT_SUFFIX=' '
-
-typeset -g POWERLEVEL9K_LEFT_PROMPT_ELEMENTS=(
-  dir
-  vcs
-)
-
-typeset -g POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS=(
-  status
-  command_execution_time
-  background_jobs
-  context
-)
-
-typeset -g POWERLEVEL9K_STATUS_OK=false
-typeset -g POWERLEVEL9K_STATUS_ERROR=true
-typeset -g POWERLEVEL9K_COMMAND_EXECUTION_TIME_THRESHOLD=3
-typeset -g POWERLEVEL9K_COMMAND_EXECUTION_TIME_PRECISION=1
-typeset -g POWERLEVEL9K_BACKGROUND_JOBS_VERBOSE=false
-
-typeset -g POWERLEVEL9K_CONTEXT_TEMPLATE='%n@%m'
-typeset -g POWERLEVEL9K_CONTEXT_{DEFAULT,SUDO}_{CONTENT,VISUAL_IDENTIFIER}_EXPANSION=
-typeset -g POWERLEVEL9K_CONTEXT_REMOTE_CONTENT_EXPANSION='%n@%m'
-typeset -g POWERLEVEL9K_CONTEXT_REMOTE_VISUAL_IDENTIFIER_EXPANSION=
-
-typeset -g POWERLEVEL9K_DIR_ANCHOR_BOLD=true
-typeset -g POWERLEVEL9K_SHORTEN_STRATEGY=truncate_to_unique
-typeset -g POWERLEVEL9K_SHORTEN_DIR_LENGTH=3
-typeset -g POWERLEVEL9K_DIR_MAX_LENGTH=80
-
-typeset -g POWERLEVEL9K_VCS_CLEAN_FOREGROUND=76
-typeset -g POWERLEVEL9K_VCS_MODIFIED_FOREGROUND=178
-typeset -g POWERLEVEL9K_VCS_UNTRACKED_FOREGROUND=178
-
-typeset -g POWERLEVEL9K_PROMPT_ADD_NEWLINE=true
-typeset -g POWERLEVEL9K_TRANSIENT_PROMPT=off
-typeset -g POWERLEVEL9K_PROMPT_CHAR_OK_VIINS_CONTENT_EXPANSION='❯'
-typeset -g POWERLEVEL9K_PROMPT_CHAR_ERROR_VIINS_CONTENT_EXPANSION='❯'
+cat launch/config/p10k.zsh.part-* > "$HOME/.p10k.zsh"
+chmod 0644 "$HOME/.p10k.zsh"
 ```
+
+这份配置拆分保存在 `launch/config/p10k.zsh.part-*`，拼接后与当前使用的 `~/.p10k.zsh` 一致。配置基于 Powerlevel10k `rainbow` 模板，保留 `dir`、`vcs`、运行环境、云环境、上下文和时间等模块，并覆盖为「海上生明月」配色：
+
+```text
+mainColor    #4D5CCB
+bgColor      #181F34
+surfaceColor #101523
+linkColor    #9ABBFE
+accentColor  #E4D29A
+onMainColor  #FFFFFF
+textColor    #A8B3D7
+```
+
+Git 状态配色：
+
+```text
+clean      #9ABBFE
+modified   #E4D29A
+untracked  #7F91E8
+conflicted #B66A86
+```
+
+`root@host` 使用 `#101523` 背景和 `#E4D29A` 文字，避免默认 root 红色模块过于显眼。
 
 ## 11. 安装 Nerd Font
 
