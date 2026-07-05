@@ -330,10 +330,11 @@ cp -a "$HOME/.p10k.zsh" "$HOME/.p10k.zsh.bak.$(date +%Y%m%d%H%M%S)" 2>/dev/null 
 从仓库写入固定配置：
 
 ```shell
-install -m 0644 launch/config/p10k.zsh "$HOME/.p10k.zsh"
+cat launch/config/p10k.zsh.part-* > "$HOME/.p10k.zsh"
+chmod 0644 "$HOME/.p10k.zsh"
 ```
 
-这份配置基于 Powerlevel10k `rainbow` 模板，保留 `dir`、`vcs`、运行环境、云环境、上下文和时间等模块，并覆盖为「海上生明月」配色：
+这份配置拆分保存在 `launch/config/p10k.zsh.part-*`，拼接后与当前使用的 `~/.p10k.zsh` 一致。配置基于 Powerlevel10k `rainbow` 模板，保留 `dir`、`vcs`、运行环境、云环境、上下文和时间等模块，并覆盖为「海上生明月」配色：
 
 ```text
 mainColor    #4D5CCB
