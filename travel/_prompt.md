@@ -19,7 +19,7 @@
 ```markdown
 # [地区名称，如：四川]
 
-> Git 链接：<https://github.com/zhangqian-silk/Markdown/blob/master/travel/[地区名称，如：四川].md>
+> Git 链接：<https://github.com/zhangqian-silk/life-note/blob/master/travel/[地区名称，如：四川].md>
 
 ## 景点
 
