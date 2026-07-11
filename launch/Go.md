@@ -5,7 +5,7 @@
 > <https://go.dev/dl/>
 
 1. 从官网下载对应版本的安装包，并直接安装：
-   <div align=center><img src="images/2024-01-05-21-04-24.png" width="60%"></div>
+   <div align=center><img loading="lazy" decoding="async" src="./images/2024-01-05-21-04-24.png" width="60%"></div>
 
 2. 配置项目路径，文件结构如下所示：
 
@@ -27,7 +27,7 @@
    2. GOSUMDB 指定了用于校验模块版本的数据库的名称和地址。当你从模块代理服务器下载一个模块时，Go 也会从 GOSUMDB 指定的数据库下载该模块版本的哈希校验和，并将其和你下载的模块对比，来确保你下载的是正确且未被篡改过的模块。可以配置为：`go env -w GOSUMDB="sum.golang.google.cn"`
 
 5. 命令行执行 `go version`，验证版本信息：
-    <div align=center><img src="images/2024-01-05-21-07-14.png" width="60%"></div>
+    <div align=center><img loading="lazy" decoding="async" src="./images/2024-01-05-21-07-14.png" width="60%"></div>
 
 6. 命令行执行 `go env`，验证最终环境信息：
     ![](images/2024-01-05-22-04-40.png)
@@ -44,8 +44,8 @@
    ![](images/2024-01-05-22-08-37.png)
 
 4. 配置字体信息（注意有多处配置）：
-    <div align=center><img src="images/2024-01-05-22-21-02.png" width="40%"> <img src="images/2024-01-05-22-21-48.png" width="40%"></div>
-    <div align=center><img src="images/2024-01-05-22-22-11.png" width="40%"> <img src="images/2024-01-05-22-22-31.png" width="40%"></div>
+    <div align=center><img loading="lazy" decoding="async" src="./images/2024-01-05-22-21-02.png" width="40%"> <img loading="lazy" decoding="async" src="./images/2024-01-05-22-21-48.png" width="40%"></div>
+    <div align=center><img loading="lazy" decoding="async" src="./images/2024-01-05-22-22-11.png" width="40%"> <img loading="lazy" decoding="async" src="./images/2024-01-05-22-22-31.png" width="40%"></div>
 
 ## Go Pkg 推荐
 
