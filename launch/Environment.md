@@ -2,7 +2,7 @@
 
 目标：让 agent 在一台新设备上完成基础开发环境、Codex、Claude Code 和 Magpie 的安装、接入与验证。默认使用普通用户，适用于 macOS 和常见 Linux 发行版；Windows 原生环境见 [Windows 专区](./windows/index.md)。
 
-默认组件：Zsh 配套环境（Oh My Zsh、Powerlevel10k、补全与高亮插件、fzf、zoxide、Nerd Font）、Git、SSH、curl、jq、ripgrep、Python 3、Node.js LTS / npm / pnpm、Docker / Compose、Codex CLI、Claude Code、Magpie。
+默认组件：Zsh 配套环境（Oh My Zsh、Powerlevel10k、补全与高亮插件、fzf、zoxide、Nerd Font）、Git、SSH、curl、jq、ripgrep、Python 3、Node.js LTS / npm / pnpm、Docker / Compose、代理软件（Clash Verge Rev / Mihomo）、Codex CLI、Claude Code、Magpie。
 
 ## 1. 给执行 agent 的约定
 
@@ -20,7 +20,7 @@
 |---|---|---|
 |系统、架构、普通用户名、sudo 是否可用|选择安装命令|本机检测|
 |`GIT_USER_NAME`、`GIT_USER_EMAIL`|Git 提交身份|用户提供；已有值优先保留|
-|网络代理（如需）、内部 CA（如需）|访问软件源与模型服务|用户或设备管理配置|
+|`PROXY_SUBSCRIPTION_URL`、已有代理地址、内部 CA（如需）|配置代理与访问软件源、模型服务|用户或设备管理配置|
 |Magpie 模式：新建 / 恢复备份 / 连接已有网关|选择第 7 节的接入路径|默认本机新建|
 |Relay 地址、API 协议、认证方式、模型列表|配置内部 provider|服务管理员提供|
 |DeepSeek API key、Factory 等订阅账号|配置用户实际拥有的 provider|用户提供或交互登录|
@@ -41,22 +41,9 @@ done
 
 开始修改前，把已有的 `~/.zshrc`、`~/.zprofile`、`~/.gitconfig`、`~/.codex/config.toml`、`~/.codex/auth.json`、`~/.claude/settings.json`、`~/.claude.json` 和已有 Magpie 配置备份到**仓库之外**。备份目录权限设为 `700`，含凭据文件设为 `600`。只备份存在的文件，记录备份位置。
 
-### 网络与代理（需要时）
+### 联网准备
 
-先复用设备已有代理和证书。需要临时设置代理时，由用户提供不含口令的 `SETUP_PROXY_URL`，在当前安装 Shell 中加载：
-
-```bash
-: "${SETUP_PROXY_URL:?提供当前设备可用的代理地址}"
-export HTTP_PROXY="$SETUP_PROXY_URL"
-export HTTPS_PROXY="$SETUP_PROXY_URL"
-export http_proxy="$SETUP_PROXY_URL"
-export https_proxy="$SETUP_PROXY_URL"
-setup_no_proxy="${NO_PROXY:-${no_proxy:-}}"
-export NO_PROXY="localhost,127.0.0.1,::1${setup_no_proxy:+,$setup_no_proxy}"
-export no_proxy="$NO_PROXY"
-```
-
-按需合并内部域名与网段；本机 Magpie 的回环地址必须绕过代理。不要把旧设备的代理地址直接搬过来。Magpie 后台服务和 Docker Engine 的网络环境需分别在其设置中配置，不能假设它们继承当前终端环境。内部 CA 通过系统信任存储配置，不通过关闭 TLS 校验解决下载问题。
+先复用设备已有代理和证书。完成第 2 节的系统基础工具安装后，执行 [代理软件与订阅配置](./Proxy.md)，使用订阅链接建立本机代理，再继续后面的开发工具安装。若当前网络无法取得基础安装包，先由用户提供可用网络出口或离线安装包。
 
 ## 2. 安装系统基础工具
 
@@ -68,7 +55,7 @@ export no_proxy="$NO_PROXY"
 sudo apt-get update
 sudo apt-get install -y \
   ca-certificates curl git openssh-client zsh jq ripgrep \
-  python3 python3-pip python3-venv build-essential pkg-config unzip
+  python3 python3-pip python3-venv build-essential pkg-config gzip unzip
 ```
 
 ### Fedora
@@ -76,7 +63,7 @@ sudo apt-get install -y \
 ```bash
 sudo dnf install -y \
   ca-certificates curl git openssh-clients zsh jq ripgrep \
-  python3 python3-pip gcc gcc-c++ make pkgconf-pkg-config unzip
+  python3 python3-pip gcc gcc-c++ make pkgconf-pkg-config gzip unzip
 ```
 
 其他 Linux 发行版先根据 `/etc/os-release` 找到对应包管理器和官方安装方式，不套用 Ubuntu 的仓库地址。
@@ -109,6 +96,10 @@ brew install git jq ripgrep python pkgconf
 ```
 
 将安装器要求的 `brew shellenv` 行合并到 `~/.zprofile`，避免重复追加。第 4 节链接的 Zsh 配置也会让非登录 Zsh 加载 Homebrew。不要使用 `sudo brew install`。
+
+### 配置代理软件
+
+执行 [代理软件与订阅配置](./Proxy.md)：桌面使用 Clash Verge Rev，Linux 服务器使用 Mihomo。根据订阅链接导入节点并验证代理可用，保存本机代理地址与直连列表后，继续本文第 3 节。
 
 ## 3. Git 与 SSH
 
@@ -214,9 +205,9 @@ sudo apt-get update
 sudo apt-get install -y docker-ce docker-ce-cli containerd.io \
   docker-buildx-plugin docker-compose-plugin
 sudo systemctl enable --now docker
-sudo docker run --rm hello-world
-sudo docker compose version
 ```
+
+先按 [Linux Docker 代理配置](./Proxy.md#linux-docker-engine) 设置服务代理并验证镜像拉取，再执行 `sudo docker compose version`。
 
 软件源方式参见 [Ubuntu](https://docs.docker.com/engine/install/ubuntu/) / [Debian](https://docs.docker.com/engine/install/debian/) 官方文档。默认通过 `sudo docker` 使用；若用户需要免 sudo，再按 [Linux post-install](https://docs.docker.com/engine/install/linux-postinstall/) 配置。`docker` 组具有相当于 root 的主机权限，不把放宽 socket 权限作为修复办法。
 
@@ -228,9 +219,9 @@ sudo curl -fsSL https://download.docker.com/linux/fedora/docker-ce.repo \
 sudo dnf install -y docker-ce docker-ce-cli containerd.io \
   docker-buildx-plugin docker-compose-plugin
 sudo systemctl enable --now docker
-sudo docker run --rm hello-world
-sudo docker compose version
 ```
+
+先按 [Linux Docker 代理配置](./Proxy.md#linux-docker-engine) 设置服务代理并验证镜像拉取，再执行 `sudo docker compose version`。
 
 参见 [Fedora 官方安装说明](https://docs.docker.com/engine/install/fedora/)。其他 Linux 发行版从 [Docker Engine 安装入口](https://docs.docker.com/engine/install/) 选择对应分支。
 
@@ -243,7 +234,7 @@ brew install --cask docker-desktop
 open -a Docker
 ```
 
-首次启动需要用户完成安装窗口中的设置。等待 Engine 就绪后执行：
+首次启动需要用户完成安装窗口中的设置。按 [macOS Docker Desktop 代理配置](./Proxy.md#macos-docker-desktop) 使用系统代理，等待 Engine 就绪后执行：
 
 ```bash
 docker version
@@ -283,6 +274,8 @@ curl --noproxy '*' -fsS http://127.0.0.1:3425/
 ```
 
 Linux 使用用户级 systemd，macOS 使用 launchd。Linux 服务器如需登出后继续运行，由管理员按实际要求启用该用户的 linger。没有用户级服务管理器的容器可在独立终端运行 `magpie serve --web`，交给容器或已有进程管理器维护，不再启动第二份抢占端口的实例。
+
+安装完成后，按 [代理文档的 Magpie 配置](./Proxy.md) 为后台服务设置本机代理，再配置 provider。
 
 网关默认是本机 `127.0.0.1:3425`，Web 默认端口为 `3430`。**使用 `magpie daemon status` 打印的实际登录链接**，其中带有 Web 登录 key，不将它提交到仓库。Web 的 key 与模型网关调用凭据不是同一个概念。
 
@@ -388,7 +381,9 @@ magpie model suffix claude own
 
 ## 8. 验收与交接
 
-先完成 [Zsh 环境配置的验收](./Zsh.md#_13-验证)，确认 Powerlevel10k、插件、fzf、zoxide 和终端字体均已生效。再重新打开一个登录终端，确认版本和 PATH：
+先完成 [代理软件与订阅验收](./Proxy.md)，确认订阅节点已加载，终端、Magpie 和 Docker 能使用预期网络出口。
+
+再完成 [Zsh 环境配置的验收](./Zsh.md#_13-验证)，确认 Powerlevel10k、插件、fzf、zoxide 和终端字体均已生效。再重新打开一个登录终端，确认版本和 PATH：
 
 ```bash
 zsh -lic 'zsh --version; fzf --version; zoxide --version; git --version; python3 --version; node --version; npm --version; pnpm --version; codex --version; claude --version; magpie --version'
@@ -411,7 +406,7 @@ codex exec --skip-git-repo-check -C "$smoke_dir" '只回复 OK，不调用工具
 
 在 Magpie 中确认两次请求走了预期 provider / 模型。连接失败、登录缺失、配额不足或工具调用协议不兼容都应报告为待解决问题，不能仅凭 `/v1/models` 有返回就判定完成。
 
-agent 最终报告只包含：系统与架构、安装版本与程序路径、配置变更和备份位置、Zsh 配套环境验收结果、Docker 是否就绪、Magpie 运行方式、两个默认模型 ID、两次调用结果、仍需用户处理的事项。报告不包含 key、token、备份口令或带 key 的 Web URL。
+agent 最终报告只包含：系统与架构、安装版本与程序路径、配置变更和备份位置、Zsh 配套环境验收结果、代理软件与订阅更新结果、Docker 是否就绪、Magpie 运行方式、两个默认模型 ID、两次调用结果、仍需用户处理的事项。报告不包含 key、token、备份口令或带 key 的 Web URL。
 
 ## 9. 更新与回退
 

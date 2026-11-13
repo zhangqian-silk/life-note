@@ -7,7 +7,7 @@
 ## 内容导航
 
 - `travel/`：城市景点、餐厅、路线和旅行贴士。
-- `launch/`：默认面向 Linux / macOS，入口为 [新设备环境配置](launch/Environment.md)，覆盖基础工具、Codex、Claude Code 与 Magpie。
+- `launch/`：默认面向 Linux / macOS，入口为 [新设备环境配置](launch/Environment.md)，覆盖基础工具、[代理软件与订阅](launch/Proxy.md)、Codex、Claude Code 与 Magpie。
 - `launch/windows/`：[Windows 专区](launch/windows/index.md)，集中保存 Windows 基础环境与 PotPlayer 等软件配置。
 - `daily/`：营养与日常生活笔记。
 - `麻将/`：麻将牌效率理论和实战策略。

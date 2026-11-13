@@ -377,6 +377,7 @@ nvm() {
 [[ -o interactive && ( -t 0 || -t 1 ) && -r "$HOME/.p10k.zsh" ]] && source "$HOME/.p10k.zsh"
 
 # ----- Local environment migrated from previous shell -----
+[[ -r "$HOME/.config/life-note/proxy.env" ]] && source "$HOME/.config/life-note/proxy.env"
 # Put host-specific settings from ~/.bashrc, ~/.bash_profile, ~/.profile and
 # /etc/profile.d/*.sh here. Keep values consistent with the previous shell.
 #

@@ -54,7 +54,8 @@ export default defineConfig({
           text: 'Linux / macOS',
           items: [
             { text: '新设备环境配置（面向 agent）', link: '/launch/Environment' },
-            { text: 'Zsh 配套环境', link: '/launch/Zsh' }
+            { text: 'Zsh 配套环境', link: '/launch/Zsh' },
+            { text: '代理软件与订阅配置', link: '/launch/Proxy' }
           ]
         },
         {

@@ -18,6 +18,7 @@ const navigationTargets = [
   'travel/义乌&横店.md',
   'travel/长江.md',
   'launch/Environment.md',
+  'launch/Proxy.md',
   'launch/Zsh.md',
   'launch/windows/index.md',
   'launch/windows/Basic/Windows.md',
