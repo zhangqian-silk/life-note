@@ -2,7 +2,7 @@
 
 目标：让 agent 在一台新设备上完成基础开发环境、Codex、Claude Code 和 Magpie 的安装、接入与验证。默认使用普通用户，适用于 macOS 和常见 Linux 发行版；Windows 原生环境见 [Windows 专区](./windows/index.md)。
 
-默认组件：Zsh、Git、SSH、curl、jq、ripgrep、Python 3、Node.js LTS / npm、Docker / Compose、Codex CLI、Claude Code、Magpie。
+默认组件：Zsh 配套环境（Oh My Zsh、Powerlevel10k、补全与高亮插件、fzf、zoxide、Nerd Font）、Git、SSH、curl、jq、ripgrep、Python 3、Node.js LTS / npm / pnpm、Docker / Compose、Codex CLI、Claude Code、Magpie。
 
 ## 1. 给执行 agent 的约定
 
@@ -108,7 +108,7 @@ fi
 brew install git jq ripgrep python pkgconf
 ```
 
-将安装器要求的 `brew shellenv` 行合并到 `~/.zprofile`，避免重复追加。后面第 4 节也会让非登录 Zsh 加载 Homebrew。不要使用 `sudo brew install`。
+将安装器要求的 `brew shellenv` 行合并到 `~/.zprofile`，避免重复追加。第 4 节链接的 Zsh 配置也会让非登录 Zsh 加载 Homebrew。不要使用 `sudo brew install`。
 
 ## 3. Git 与 SSH
 
@@ -138,61 +138,11 @@ ssh-keygen -t ed25519 -C "$GIT_USER_EMAIL"
 
 将生成的 `.pub` 公钥登记到目标 Git 服务，再用目标仓库执行 `git ls-remote <仓库地址>` 验证访问。不要复制旧设备的私钥到仓库，也不要关闭 SSH 主机密钥校验。
 
-## 4. Node.js、npm 与 Zsh
+## 4. 配置 Zsh 配套环境与 Node.js / npm
 
-### 安装 nvm 和当前 LTS
+执行 [Zsh 环境配置](./Zsh.md) 的第 1–13 节，完成整套环境：Zsh、Oh My Zsh、Powerlevel10k、补全与高亮插件、fzf、zoxide、Nerd Font，以及 nvm、Node.js LTS、npm 和 pnpm。Powerlevel10k 及仓库中的 `.p10k.zsh` 配置是这套环境的一部分。
 
-本文核对时使用 nvm `v0.41.0`。安装前可查看 [nvm 官方说明](https://github.com/nvm-sh/nvm#installing-and-updating)，已有 nvm 时直接加载，不重复安装：
-
-```bash
-export NVM_DIR="$HOME/.nvm"
-if [ ! -s "$NVM_DIR/nvm.sh" ]; then
-  curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.41.0/install.sh \
-    | PROFILE=/dev/null bash
-fi
-. "$NVM_DIR/nvm.sh"
-nvm install --lts
-nvm alias default 'lts/*'
-nvm use default
-node --version
-npm --version
-npm config get prefix
-```
-
-npm 随 Node 一起安装，不再通过 apt、dnf 或 Homebrew 安装另一份 Node/npm。Node 至少应满足当前两个 CLI 的 `engines` 要求；第 5 节会再检查。nvm 管理的全局包应位于当前用户目录下。
-
-### 让新终端与 agent 能找到工具
-
-把下面的块**合并一次**到 `~/.zshrc`，保留文件中已有配置。同名功能已配置时调整现有块，不再重复添加：
-
-```zsh
-# >>> life-note development environment >>>
-if [[ -x /opt/homebrew/bin/brew ]]; then
-  eval "$(/opt/homebrew/bin/brew shellenv)"
-elif [[ -x /usr/local/bin/brew ]]; then
-  eval "$(/usr/local/bin/brew shellenv)"
-fi
-
-path=("$HOME/.local/bin" $path)
-typeset -U path
-export PATH
-
-export NVM_DIR="$HOME/.nvm"
-[[ -s "$NVM_DIR/nvm.sh" ]] && source "$NVM_DIR/nvm.sh"
-# <<< life-note development environment <<<
-```
-
-检查后，在支持 `chsh` 的正常登录环境中切换默认 Shell：
-
-```bash
-zsh -n "$HOME/.zshrc"
-chsh -s "$(command -v zsh)"
-zsh -lic 'command -v node; node --version; npm --version'
-```
-
-`chsh` 可能要求用户密码；目录服务管理的账号应按管理员要求修改。macOS 的 `/bin/zsh` 已可用，不必另装 Zsh。非交互脚本、systemd / launchd 服务不会自动加载 `.zshrc`，需要显式加载 `nvm.sh` 或配置实际的可执行文件路径；不要把 nvm 加载代码塞进 `.zshenv`。
-
-Oh My Zsh、Powerlevel10k、fzf 和 zoxide 的详细配置见 [Zsh 进阶配置](./Zsh.md)。
+Zsh、Node/npm 的安装、Shell 配置迁移、PATH 与终端字体设置统一维护在该文档中。完成其验收后，返回本文第 5 节继续安装 Codex 和 Claude Code。
 
 ## 5. 通过 npm 安装 Codex 与 Claude Code
 
@@ -438,10 +388,10 @@ magpie model suffix claude own
 
 ## 8. 验收与交接
 
-重新打开一个登录终端，确认版本和 PATH，而不只检查当前安装进程：
+先完成 [Zsh 环境配置的验收](./Zsh.md#_13-验证)，确认 Powerlevel10k、插件、fzf、zoxide 和终端字体均已生效。再重新打开一个登录终端，确认版本和 PATH：
 
 ```bash
-zsh -lic 'git --version; python3 --version; node --version; npm --version; codex --version; claude --version; magpie --version'
+zsh -lic 'zsh --version; fzf --version; zoxide --version; git --version; python3 --version; node --version; npm --version; pnpm --version; codex --version; claude --version; magpie --version'
 venv_check_dir="$(mktemp -d)"
 python3 -m venv "$venv_check_dir"
 "$venv_check_dir/bin/python" -m pip --version
@@ -461,7 +411,7 @@ codex exec --skip-git-repo-check -C "$smoke_dir" '只回复 OK，不调用工具
 
 在 Magpie 中确认两次请求走了预期 provider / 模型。连接失败、登录缺失、配额不足或工具调用协议不兼容都应报告为待解决问题，不能仅凭 `/v1/models` 有返回就判定完成。
 
-agent 最终报告只包含：系统与架构、安装版本与程序路径、配置变更和备份位置、Docker 是否就绪、Magpie 运行方式、两个默认模型 ID、两次调用结果、仍需用户处理的事项。报告不包含 key、token、备份口令或带 key 的 Web URL。
+agent 最终报告只包含：系统与架构、安装版本与程序路径、配置变更和备份位置、Zsh 配套环境验收结果、Docker 是否就绪、Magpie 运行方式、两个默认模型 ID、两次调用结果、仍需用户处理的事项。报告不包含 key、token、备份口令或带 key 的 Web URL。
 
 ## 9. 更新与回退
 
