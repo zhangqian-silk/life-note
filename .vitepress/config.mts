@@ -27,7 +27,7 @@ export default defineConfig({
     nav: [
       { text: '首页', link: '/' },
       { text: '旅行攻略', link: '/travel/青岛' },
-      { text: '开发环境', link: '/launch/Zsh' },
+      { text: '开发环境', link: '/launch/Environment' },
       { text: '日常生活', link: '/daily/营养元素' },
       { text: '麻将牌效', link: '/麻将/牌效/牌效率' },
       { text: '实用网站', link: '/web' }
@@ -51,18 +51,18 @@ export default defineConfig({
       ],
       '/launch/': [
         {
-          text: '环境配置',
+          text: 'Linux / macOS',
           items: [
-            { text: 'Zsh', link: '/launch/Zsh' },
-            { text: 'OpenCloudOS', link: '/launch/OpenCloudOS' },
-            { text: 'Go', link: '/launch/Go' },
-            { text: 'Windows', link: '/launch/Basic/Windows' }
+            { text: '新设备环境配置（面向 agent）', link: '/launch/Environment' },
+            { text: 'Zsh 进阶配置', link: '/launch/Zsh' }
           ]
         },
         {
-          text: '软件配置',
+          text: 'Windows 专区',
           items: [
-            { text: 'PotPlayer', link: '/launch/program/PotPlayer' }
+            { text: 'Windows 导航', link: '/launch/windows/' },
+            { text: 'Windows 基础环境', link: '/launch/windows/Basic/Windows' },
+            { text: 'PotPlayer', link: '/launch/windows/program/PotPlayer' }
           ]
         }
       ],

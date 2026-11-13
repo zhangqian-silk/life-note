@@ -1,6 +1,8 @@
-# Zsh 环境配置
+# Zsh 进阶配置（Linux / macOS）
 
-> 目标：在 Linux 服务器上配置一套稳定、可维护的 zsh 开发环境，包括 zsh、oh-my-zsh、Powerlevel10k、常用插件、fzf、zoxide、nvm、Node.js、pnpm。
+> 目标：在 Linux / macOS 上配置可维护的 Zsh、Oh My Zsh、Powerlevel10k、常用插件、fzf 和 zoxide。新设备先完成 [基础环境、Codex、Claude Code 与 Magpie 配置](./Environment.md)，本篇的主题和插件按需添加。
+
+已有 nvm、Node.js、Shell 配置块时直接复用；示例中的完整 `.zshrc` 只作为合并参考，不覆盖基础配置、代理、凭据入口或其他工具的初始化。Git clone 目标目录已存在时先检查其远端和状态，不重复 clone。
 
 ## 最终目录结构
 
@@ -34,16 +36,22 @@ sudo apt update
 sudo apt install -y git curl wget zsh
 ```
 
-CentOS / RHEL / OpenCloudOS：
+Fedora / RHEL：
 
 ```shell
-sudo yum install -y git curl wget zsh
+sudo dnf install -y git curl wget zsh
 ```
 
 Arch Linux：
 
 ```shell
 sudo pacman -S --noconfirm git curl wget zsh
+```
+
+macOS 使用系统自带的 `/bin/zsh`。完成 Homebrew 安装后补充本篇工具依赖：
+
+```shell
+brew install git wget python
 ```
 
 确认 zsh：
@@ -76,7 +84,11 @@ sudo usermod --shell "$(command -v zsh)" username
 确认结果：
 
 ```shell
-getent passwd "$USER"
+if command -v getent >/dev/null 2>&1; then
+  getent passwd "$USER"
+elif [[ "$(uname -s)" == Darwin ]]; then
+  dscl . -read "/Users/$(id -un)" UserShell
+fi
 ```
 
 默认 shell 通常需要重新登录后生效。
@@ -152,23 +164,13 @@ cp "$HOME/.local/opt/fzf/shell/completion.zsh" "$HOME/.local/share/zsh/fzf/compl
 cp "$HOME/.local/opt/fzf/shell/key-bindings.zsh" "$HOME/.local/share/zsh/fzf/key-bindings.zsh"
 ```
 
-对本地副本做兼容处理：
+使用 fzf 仓库提供的安装器下载当前平台的可执行文件，不让安装器重写 Shell 配置：
 
 ```shell
-if ! grep -q '__fzf_completion_options/ zle on/' "$HOME/.local/share/zsh/fzf/completion.zsh"; then
-  sed -i '/eval \$__fzf_completion_options/i\
-  __fzf_completion_options=${__fzf_completion_options/ zle on/}\
-  __fzf_completion_options=${__fzf_completion_options/ zle off/}' \
-    "$HOME/.local/share/zsh/fzf/completion.zsh"
-fi
-
-if ! grep -q '__fzf_key_bindings_options/ zle on/' "$HOME/.local/share/zsh/fzf/key-bindings.zsh"; then
-  sed -i '/eval \$__fzf_key_bindings_options/i\
-  __fzf_key_bindings_options=${__fzf_key_bindings_options/ zle on/}\
-  __fzf_key_bindings_options=${__fzf_key_bindings_options/ zle off/}' \
-    "$HOME/.local/share/zsh/fzf/key-bindings.zsh"
-fi
+"$HOME/.local/opt/fzf/install" --bin
 ```
+
+若旧环境里的 fzf Shell 脚本需要兼容修复，先核对当前 upstream 版本；不要把 Linux 的 `sed -i` 参数直接用于 macOS。
 
 确认：
 
@@ -193,7 +195,7 @@ curl -sSfL https://raw.githubusercontent.com/ajeetdsouza/zoxide/main/install.sh 
 安装 nvm：
 
 ```shell
-curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.41.0/install.sh | bash
 ```
 
 加载 nvm，安装 Node.js LTS：
@@ -217,7 +219,7 @@ npm install -g pnpm
 确认当前 Node 软链：
 
 ```shell
-readlink -f "$NVM_DIR/current"
+ls -ld "$NVM_DIR/current"
 node -v
 npm -v
 pnpm -v
@@ -227,10 +229,12 @@ pnpm -v
 
 写入新的 `.zshrc` 之前，必须先检查原有 shell 配置，把本机已有的环境变量、代理、别名、函数和路径配置迁移过去。
 
-先归档当前配置：
+先归档当前配置。下面的归档块在 Bash 中执行，避免 Zsh 对空 glob 报错；归档可能包含私有环境变量，只保存在本机，不粘贴到报告或提交到仓库：
 
 ```shell
+umask 077
 mkdir -p "$HOME/.config/shell-migration"
+chmod 700 "$HOME/.config/shell-migration"
 
 for file in \
   "$HOME/.bashrc" \
@@ -291,6 +295,13 @@ cp -a "$HOME/.zshrc" "$HOME/.zshrc.bak.$(date +%Y%m%d%H%M%S)" 2>/dev/null || tru
 
 ```shell
 # Powerlevel10k instant prompt is disabled for stable rendering in remote terminals.
+
+# ----- Homebrew (macOS) -----
+if [[ -x /opt/homebrew/bin/brew ]]; then
+  eval "$(/opt/homebrew/bin/brew shellenv)"
+elif [[ -x /usr/local/bin/brew ]]; then
+  eval "$(/usr/local/bin/brew shellenv)"
+fi
 
 # ----- Paths -----
 export CONDA_AUTO_ACTIVATE_BASE=false
@@ -389,7 +400,7 @@ command -v zoxide &>/dev/null && eval "$(zoxide init zsh)"
 cp -a "$HOME/.p10k.zsh" "$HOME/.p10k.zsh.bak.$(date +%Y%m%d%H%M%S)" 2>/dev/null || true
 ```
 
-从仓库写入固定配置：
+以下命令从本仓库根目录运行，在备份并确认需要应用这份主题后写入固定配置：
 
 ```shell
 cat launch/config/p10k.zsh.part-* > "$HOME/.p10k.zsh"
@@ -515,6 +526,7 @@ fzf：
 
 ```shell
 git -C "$HOME/.local/opt/fzf" pull --ff-only
+"$HOME/.local/opt/fzf/install" --bin
 cp "$HOME/.local/opt/fzf/shell/completion.zsh" "$HOME/.local/share/zsh/fzf/completion.zsh"
 cp "$HOME/.local/opt/fzf/shell/key-bindings.zsh" "$HOME/.local/share/zsh/fzf/key-bindings.zsh"
 ```
