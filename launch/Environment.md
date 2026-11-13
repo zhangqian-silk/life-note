@@ -2,7 +2,7 @@
 
 目标：让 agent 在一台新设备上完成基础开发环境、Codex、Claude Code 和 Magpie 的安装、接入与验证。默认使用普通用户，适用于 macOS 和常见 Linux 发行版；Windows 原生环境见 [Windows 专区](./windows/index.md)。
 
-默认组件：Zsh、Git、SSH、curl、jq、ripgrep、Python 3、Node.js LTS / npm、Docker / Compose、Codex CLI、Claude Code、Magpie。Go、Java、OpenCloudOS 专项设置、Shell 主题和额外语言工具链按项目需要另装。
+默认组件：Zsh、Git、SSH、curl、jq、ripgrep、Python 3、Node.js LTS / npm、Docker / Compose、Codex CLI、Claude Code、Magpie。
 
 ## 1. 给执行 agent 的约定
 
@@ -192,7 +192,7 @@ zsh -lic 'command -v node; node --version; npm --version'
 
 `chsh` 可能要求用户密码；目录服务管理的账号应按管理员要求修改。macOS 的 `/bin/zsh` 已可用，不必另装 Zsh。非交互脚本、systemd / launchd 服务不会自动加载 `.zshrc`，需要显式加载 `nvm.sh` 或配置实际的可执行文件路径；不要把 nvm 加载代码塞进 `.zshenv`。
 
-如需 Oh My Zsh、Powerlevel10k、fzf、zoxide，再按 [Zsh 进阶配置](./Zsh.md) 选择安装。它们不影响本篇的基础验收。
+Oh My Zsh、Powerlevel10k、fzf 和 zoxide 的详细配置见 [Zsh 进阶配置](./Zsh.md)。
 
 ## 5. 通过 npm 安装 Codex 与 Claude Code
 
@@ -472,7 +472,7 @@ npm install -g @openai/codex@latest @anthropic-ai/claude-code@latest
 magpie update
 ```
 
-更新后重做第 8 节的关键验收。需要固定版本时用 `包名@明确版本`，先记录上一个可用版本；不默认开启 agent 的全部权限，也不顺带安装项目尚未需要的语言或工具。
+更新后重做第 8 节的关键验收。需要固定版本时用 `包名@明确版本`，先记录上一个可用版本。
 
 撤销某个 agent 的 Magpie 接入：
 
