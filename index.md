@@ -20,8 +20,8 @@ features:
     link: /travel/青岛
   - icon: 🛠️
     title: 开发环境
-    details: 操作系统、Shell、编程语言与常用软件配置。
-    link: /launch/Zsh
+    details: 面向 agent 的 Linux / macOS 新设备配置，以及独立的 Windows 专区。
+    link: /launch/Environment
   - icon: 🌿
     title: 日常生活
     details: 营养、健康与值得长期保存的生活经验。
@@ -35,9 +35,9 @@ features:
 <div class="home-intro">
   <h2>精选内容</h2>
   <div class="quick-link-grid">
-    <a class="quick-link-card" href="./launch/Zsh.html">
-      <strong>Zsh 环境配置</strong>
-      <span>从基础依赖到 Powerlevel10k 的完整配置流程</span>
+    <a class="quick-link-card" href="./launch/Environment.html">
+      <strong>新设备开发环境配置</strong>
+      <span>Linux / macOS 基础工具、Codex、Claude Code 与 Magpie 接入</span>
     </a>
     <a class="quick-link-card" href="./travel/山西（上）.html">
       <strong>山西旅行攻略</strong>
