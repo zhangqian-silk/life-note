@@ -1,6 +1,10 @@
-# Zsh 环境配置
+# Zsh 环境配置（Linux / macOS）
 
-> 目标：在 Linux 服务器上配置一套稳定、可维护的 zsh 开发环境，包括 zsh、oh-my-zsh、Powerlevel10k、常用插件、fzf、zoxide、nvm、Node.js、pnpm。
+> 目标：在 Linux / macOS 上完成 Zsh、Oh My Zsh、Powerlevel10k、常用插件、fzf、zoxide、Nerd Font，以及 nvm、Node.js LTS、npm 和 pnpm 的完整配置。
+
+按 [新设备开发环境配置](./Environment.md) 执行时，先完成其第 1–3 节，再执行本篇第 1–13 节。验收完成后，返回该文档第 5 节继续安装 Codex 和 Claude Code。
+
+已有 nvm、Node.js、Shell 配置块时直接复用；示例中的完整 `.zshrc` 只作为合并参考，不覆盖基础配置、代理、凭据入口或其他工具的初始化。Git clone 目标目录已存在时先检查其远端和状态，不重复 clone。
 
 ## 最终目录结构
 
@@ -27,6 +31,8 @@
 
 ## 1. 安装基础依赖
 
+复用新设备配置流程中已安装的基础工具，补齐缺少的依赖。
+
 Debian / Ubuntu：
 
 ```shell
@@ -34,16 +40,22 @@ sudo apt update
 sudo apt install -y git curl wget zsh
 ```
 
-CentOS / RHEL / OpenCloudOS：
+Fedora / RHEL：
 
 ```shell
-sudo yum install -y git curl wget zsh
+sudo dnf install -y git curl wget zsh
 ```
 
 Arch Linux：
 
 ```shell
 sudo pacman -S --noconfirm git curl wget zsh
+```
+
+macOS 使用系统自带的 `/bin/zsh`。完成 Homebrew 安装后补充本篇工具依赖：
+
+```shell
+brew install git wget python
 ```
 
 确认 zsh：
@@ -67,7 +79,7 @@ chsh -s "$(command -v zsh)"
 sudo chsh -s "$(command -v zsh)" username
 ```
 
-或者：
+Linux 也可使用：
 
 ```shell
 sudo usermod --shell "$(command -v zsh)" username
@@ -76,7 +88,11 @@ sudo usermod --shell "$(command -v zsh)" username
 确认结果：
 
 ```shell
-getent passwd "$USER"
+if command -v getent >/dev/null 2>&1; then
+  getent passwd "$USER"
+elif [[ "$(uname -s)" == Darwin ]]; then
+  dscl . -read "/Users/$(id -un)" UserShell
+fi
 ```
 
 默认 shell 通常需要重新登录后生效。
@@ -152,23 +168,13 @@ cp "$HOME/.local/opt/fzf/shell/completion.zsh" "$HOME/.local/share/zsh/fzf/compl
 cp "$HOME/.local/opt/fzf/shell/key-bindings.zsh" "$HOME/.local/share/zsh/fzf/key-bindings.zsh"
 ```
 
-对本地副本做兼容处理：
+使用 fzf 仓库提供的安装器下载当前平台的可执行文件，不让安装器重写 Shell 配置：
 
 ```shell
-if ! grep -q '__fzf_completion_options/ zle on/' "$HOME/.local/share/zsh/fzf/completion.zsh"; then
-  sed -i '/eval \$__fzf_completion_options/i\
-  __fzf_completion_options=${__fzf_completion_options/ zle on/}\
-  __fzf_completion_options=${__fzf_completion_options/ zle off/}' \
-    "$HOME/.local/share/zsh/fzf/completion.zsh"
-fi
-
-if ! grep -q '__fzf_key_bindings_options/ zle on/' "$HOME/.local/share/zsh/fzf/key-bindings.zsh"; then
-  sed -i '/eval \$__fzf_key_bindings_options/i\
-  __fzf_key_bindings_options=${__fzf_key_bindings_options/ zle on/}\
-  __fzf_key_bindings_options=${__fzf_key_bindings_options/ zle off/}' \
-    "$HOME/.local/share/zsh/fzf/key-bindings.zsh"
-fi
+"$HOME/.local/opt/fzf/install" --bin
 ```
+
+若旧环境里的 fzf Shell 脚本需要兼容修复，先核对当前 upstream 版本；不要把 Linux 的 `sed -i` 参数直接用于 macOS。
 
 确认：
 
@@ -188,49 +194,44 @@ curl -sSfL https://raw.githubusercontent.com/ajeetdsouza/zoxide/main/install.sh 
 "$HOME/.local/bin/zoxide" --version
 ```
 
-## 8. 安装 nvm、Node.js、pnpm
+## 8. 安装 nvm、Node.js、npm 和 pnpm
 
-安装 nvm：
+按 [nvm 官方安装说明](https://github.com/nvm-sh/nvm#installing-and-updating) 在当前 Shell 加载 nvm，并安装 Node.js LTS。`NVM_SYMLINK_CURRENT` 让后面的 Zsh PATH 始终指向当前使用的 Node 版本：
 
-```shell
-curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
-```
-
-加载 nvm，安装 Node.js LTS：
-
-```shell
+```bash
 export NVM_DIR="$HOME/.nvm"
 export NVM_SYMLINK_CURRENT=true
-[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-
+if [ ! -s "$NVM_DIR/nvm.sh" ]; then
+  curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.41.0/install.sh \
+    | PROFILE=/dev/null bash
+fi
+. "$NVM_DIR/nvm.sh"
 nvm install --lts
 nvm alias default 'lts/*'
 nvm use default
-```
-
-安装 pnpm：
-
-```shell
 npm install -g pnpm
 ```
 
-确认当前 Node 软链：
+npm 随 Node 一起安装，全局包放在 nvm 管理的用户目录中。后续通过 npm 安装 Codex 和 Claude Code 时，继续使用这套 Node/npm。
 
-```shell
-readlink -f "$NVM_DIR/current"
-node -v
-npm -v
-pnpm -v
+```bash
+ls -ld "$NVM_DIR/current"
+node --version
+npm --version
+pnpm --version
+npm config get prefix
 ```
 
 ## 9. 迁移已有 Shell 配置
 
 写入新的 `.zshrc` 之前，必须先检查原有 shell 配置，把本机已有的环境变量、代理、别名、函数和路径配置迁移过去。
 
-先归档当前配置：
+先归档当前配置。下面的归档块在 Bash 中执行，避免 Zsh 对空 glob 报错；归档可能包含私有环境变量，只保存在本机，不粘贴到报告或提交到仓库：
 
 ```shell
+umask 077
 mkdir -p "$HOME/.config/shell-migration"
+chmod 700 "$HOME/.config/shell-migration"
 
 for file in \
   "$HOME/.bashrc" \
@@ -291,6 +292,13 @@ cp -a "$HOME/.zshrc" "$HOME/.zshrc.bak.$(date +%Y%m%d%H%M%S)" 2>/dev/null || tru
 
 ```shell
 # Powerlevel10k instant prompt is disabled for stable rendering in remote terminals.
+
+# ----- Homebrew (macOS) -----
+if [[ -x /opt/homebrew/bin/brew ]]; then
+  eval "$(/opt/homebrew/bin/brew shellenv)"
+elif [[ -x /usr/local/bin/brew ]]; then
+  eval "$(/usr/local/bin/brew shellenv)"
+fi
 
 # ----- Paths -----
 export CONDA_AUTO_ACTIVATE_BASE=false
@@ -369,6 +377,7 @@ nvm() {
 [[ -o interactive && ( -t 0 || -t 1 ) && -r "$HOME/.p10k.zsh" ]] && source "$HOME/.p10k.zsh"
 
 # ----- Local environment migrated from previous shell -----
+[[ -r "$HOME/.config/life-note/proxy.env" ]] && source "$HOME/.config/life-note/proxy.env"
 # Put host-specific settings from ~/.bashrc, ~/.bash_profile, ~/.profile and
 # /etc/profile.d/*.sh here. Keep values consistent with the previous shell.
 #
@@ -381,6 +390,8 @@ nvm() {
 command -v zoxide &>/dev/null && eval "$(zoxide init zsh)"
 ```
 
+交互终端读取 `.zshrc`。非交互脚本、systemd / launchd 服务需要显式加载 `nvm.sh` 或使用实际的可执行文件路径；nvm 的加载代码统一维护在本篇的 Shell 配置中。
+
 ## 11. 写入 `.p10k.zsh`
 
 写入前先备份：
@@ -389,14 +400,14 @@ command -v zoxide &>/dev/null && eval "$(zoxide init zsh)"
 cp -a "$HOME/.p10k.zsh" "$HOME/.p10k.zsh.bak.$(date +%Y%m%d%H%M%S)" 2>/dev/null || true
 ```
 
-从仓库写入固定配置：
+以下命令从本仓库根目录运行，备份后写入配套的 Powerlevel10k 配置：
 
 ```shell
 cat launch/config/p10k.zsh.part-* > "$HOME/.p10k.zsh"
 chmod 0644 "$HOME/.p10k.zsh"
 ```
 
-这份配置拆分保存在 `launch/config/p10k.zsh.part-*`，拼接后与当前使用的 `~/.p10k.zsh` 一致。配置基于 Powerlevel10k `rainbow` 模板，保留 `dir`、`vcs`、运行环境、云环境、上下文和时间等模块，并覆盖为「海上生明月」配色：
+这份配置拆分保存在 `launch/config/p10k.zsh.part-*`，按文件名顺序拼接为 `~/.p10k.zsh`。配置基于 Powerlevel10k `rainbow` 模板，保留 `dir`、`vcs`、运行环境、云环境、上下文和时间等模块，并覆盖为「海上生明月」配色：
 
 ```text
 mainColor    #4D5CCB
@@ -421,7 +432,7 @@ conflicted #B66A86
 
 ## 12. 安装 Nerd Font
 
-Powerlevel10k 需要本地终端使用 Nerd Font。推荐安装 `MesloLGS NF`。
+Powerlevel10k 配套使用 `MesloLGS NF`。字体安装在显示终端的设备上；通过 SSH 使用服务器时，在发起 SSH 的本机终端设置字体。
 
 macOS：
 
@@ -457,6 +468,8 @@ VS Code 终端字体：
 
 ## 13. 验证
 
+先检查配置语法、配套工具和 Node 环境：
+
 ```shell
 zsh -n "$HOME/.zshrc"
 zsh -n "$HOME/.p10k.zsh"
@@ -465,6 +478,7 @@ zsh -ic 'echo ok'
 zsh -ic 'command -v fzf; fzf --version'
 zsh -ic 'command -v zoxide; zoxide --version'
 zsh -ic 'command -v node; node -v; npm -v; pnpm -v'
+test -r "$HOME/.p10k.zsh"
 ```
 
 重新进入 zsh：
@@ -473,17 +487,22 @@ zsh -ic 'command -v node; node -v; npm -v; pnpm -v'
 exec zsh
 ```
 
-确认主题：
+在实际交互终端中确认 Powerlevel10k 与插件已加载：
 
-```shell
-echo "$ZSH_THEME"
+```zsh
+print -r -- "$ZSH_THEME"
+whence -w p10k
+print -rl -- $plugins
 ```
 
-期望输出：
+前两条命令的期望输出：
 
 ```text
 powerlevel10k/powerlevel10k
+p10k: function
 ```
+
+插件列表应包含第 5 节配置的插件。在终端中确认提示符配色、Git 状态和字体图标显示正常，自动建议、Tab 补全、语法高亮及 fzf 历史搜索可用，`z` 命令可跳转已访问的目录。
 
 ## 14. 更新
 
@@ -515,6 +534,7 @@ fzf：
 
 ```shell
 git -C "$HOME/.local/opt/fzf" pull --ff-only
+"$HOME/.local/opt/fzf/install" --bin
 cp "$HOME/.local/opt/fzf/shell/completion.zsh" "$HOME/.local/share/zsh/fzf/completion.zsh"
 cp "$HOME/.local/opt/fzf/shell/key-bindings.zsh" "$HOME/.local/share/zsh/fzf/key-bindings.zsh"
 ```
